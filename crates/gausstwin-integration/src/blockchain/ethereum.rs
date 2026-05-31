@@ -353,7 +353,9 @@ impl EthereumConnector {
             transaction_index: 0,
             block_hash: format!("0x{:064x}", block_number),
             block_number,
-            from: tx.from.unwrap_or_else(|| Address::new("0x0000000000000000000000000000000000000000")),
+            from: tx
+                .from
+                .unwrap_or_else(|| Address::new("0x0000000000000000000000000000000000000000")),
             to: tx.to,
             cumulative_gas_used: 21000,
             gas_used: 21000,
@@ -384,7 +386,10 @@ impl EthereumConnector {
     }
 
     /// Get transaction receipt
-    pub async fn get_transaction_receipt(&self, tx_hash: &TxHash) -> Result<Option<TransactionReceipt>> {
+    pub async fn get_transaction_receipt(
+        &self,
+        tx_hash: &TxHash,
+    ) -> Result<Option<TransactionReceipt>> {
         if !self.state.connected.load(Ordering::SeqCst) {
             return Err(Error::Connection("Not connected".to_string()));
         }
@@ -522,11 +527,13 @@ impl EthereumConnector {
     /// Set account balance (for testing)
     pub async fn set_balance(&self, address: &Address, balance: &str) -> Result<()> {
         let mut accounts = self.state.accounts.write().await;
-        let account = accounts.entry(address.clone()).or_insert_with(|| AccountState {
-            balance: "0x0".to_string(),
-            nonce: 0,
-            code: None,
-        });
+        let account = accounts
+            .entry(address.clone())
+            .or_insert_with(|| AccountState {
+                balance: "0x0".to_string(),
+                nonce: 0,
+                code: None,
+            });
         account.balance = balance.to_string();
         Ok(())
     }
@@ -549,10 +556,20 @@ impl EthereumConnector {
         };
 
         Metrics {
-            connections: if self.state.connected.load(Ordering::SeqCst) { 1 } else { 0 },
+            connections: if self.state.connected.load(Ordering::SeqCst) {
+                1
+            } else {
+                0
+            },
             connection_failures: 0,
-            messages_sent: self.internal_metrics.transactions_sent.load(Ordering::Relaxed),
-            messages_received: self.internal_metrics.events_received.load(Ordering::Relaxed),
+            messages_sent: self
+                .internal_metrics
+                .transactions_sent
+                .load(Ordering::Relaxed),
+            messages_received: self
+                .internal_metrics
+                .events_received
+                .load(Ordering::Relaxed),
             errors: self.internal_metrics.errors.load(Ordering::Relaxed),
             average_latency_ms: avg_latency,
             bytes_sent: 0,
@@ -671,7 +688,10 @@ mod tests {
         connector.connect().await.unwrap();
 
         let bytecode = vec![0x60, 0x80, 0x60, 0x40]; // Simple bytecode
-        let (tx_hash, address) = connector.deploy_contract(bytecode, None, None).await.unwrap();
+        let (tx_hash, address) = connector
+            .deploy_contract(bytecode, None, None)
+            .await
+            .unwrap();
 
         assert!(tx_hash.0.starts_with("0x"));
         assert!(address.is_valid());

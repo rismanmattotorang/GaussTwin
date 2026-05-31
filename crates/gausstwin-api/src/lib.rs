@@ -1,11 +1,11 @@
 //! GaussTwin API Server
-//! 
+//!
 //! High-performance API server with support for:
 //! - REST API
 //! - GraphQL
 //! - gRPC
 //! - WebSocket
-//! 
+//!
 //! Features:
 //! - Authentication & Authorization
 //! - Rate Limiting
@@ -40,7 +40,7 @@ pub mod websocket;
 mod grpc;
 
 // Re-exports
-pub use api::{ApiServer, ApiConfig};
+pub use api::{ApiConfig, ApiServer};
 pub use auth::{AuthManager, Claims};
 pub use cache::CacheManager;
 pub use config::ServerConfig;
@@ -73,19 +73,19 @@ impl AppState {
     pub async fn new(config: ServerConfig) -> Result<Self> {
         // Initialize database
         let db = Arc::new(DatabaseManager::new(&config.database).await?);
-        
+
         // Initialize cache
         let cache = Arc::new(CacheManager::new(&config.cache).await?);
-        
+
         // Initialize auth
         let auth = Arc::new(AuthManager::new(&config.auth)?);
-        
+
         // Initialize metrics
         let metrics = Arc::new(MetricsManager::new(&config.metrics)?);
-        
+
         // Initialize simulation manager
         let sim_manager = Arc::new(SimulationManager::new());
-        
+
         Ok(Self {
             db,
             cache,
@@ -101,17 +101,17 @@ impl AppState {
 pub async fn init(config: ServerConfig) -> Result<Server> {
     // Create application state
     let state = AppState::new(config).await?;
-    
+
     // Create server instance
     let server = Server::new(state);
-    
+
     Ok(server)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[tokio::test]
     async fn test_server_init() {
         let config = ServerConfig::default();

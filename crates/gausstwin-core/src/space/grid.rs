@@ -1,7 +1,7 @@
-use std::collections::HashMap;
 use crate::agent::AgentId;
 use crate::error::Result;
-use crate::space::{Position, SpaceExtent, Space, VecN, Bounds};
+use crate::space::{Bounds, Position, Space, SpaceExtent, VecN};
+use std::collections::HashMap;
 
 /// Grid-based space implementation
 #[derive(Debug)]
@@ -38,7 +38,8 @@ impl GridSpace {
 impl Space for GridSpace {
     fn add_agent(&mut self, agent_id: AgentId, position: Position) -> Result<()> {
         let coords = self.get_cell_coords(position.coords());
-        self.cells.entry(coords)
+        self.cells
+            .entry(coords)
             .or_insert_with(Vec::new)
             .push(agent_id);
         Ok(())
@@ -70,7 +71,8 @@ impl Space for GridSpace {
 
     fn get_agents_at(&self, pos: &Position) -> Vec<AgentId> {
         let coords = self.get_cell_coords(pos.coords());
-        self.cells.get(&coords)
+        self.cells
+            .get(&coords)
             .map(|agents| agents.clone())
             .unwrap_or_default()
     }
@@ -80,7 +82,8 @@ impl Space for GridSpace {
     }
 
     fn get_positions(&self) -> Vec<Position> {
-        self.cells.iter()
+        self.cells
+            .iter()
             .flat_map(|(coords, agents)| {
                 let pos = self.get_cell_center(*coords);
                 agents.iter().map(move |_| Position::Grid(pos.clone()))
@@ -91,7 +94,7 @@ impl Space for GridSpace {
     fn get_empty_positions(&self) -> Vec<Position> {
         let mut empty = Vec::new();
         let bounds = self.bounds();
-        
+
         for x in (bounds.min.x.floor() as i32)..=(bounds.max.x.ceil() as i32) {
             for y in (bounds.min.y.floor() as i32)..=(bounds.max.y.ceil() as i32) {
                 for z in (bounds.min.z.floor() as i32)..=(bounds.max.z.ceil() as i32) {
@@ -116,7 +119,7 @@ impl Space for GridSpace {
                     let neighbor_coords = (
                         center_coords.0 + dx,
                         center_coords.1 + dy,
-                        center_coords.2 + dz
+                        center_coords.2 + dz,
                     );
                     let neighbor_pos = self.get_cell_center(neighbor_coords);
                     let dist = (neighbor_pos - pos.coords()).magnitude();
@@ -140,7 +143,7 @@ impl Space for GridSpace {
                     let pos = (
                         center_coords.0 + dx,
                         center_coords.1 + dy,
-                        center_coords.2 + dz
+                        center_coords.2 + dz,
                     );
                     if let Some(agents) = self.cells.get(&pos) {
                         let pos_center = self.get_cell_center(pos);
@@ -157,7 +160,9 @@ impl Space for GridSpace {
 
     fn nearest_neighbors(&self, position: &Position, k: usize) -> Vec<AgentId> {
         let pos_coords = position.coords();
-        let mut distances: Vec<_> = self.cells.iter()
+        let mut distances: Vec<_> = self
+            .cells
+            .iter()
             .flat_map(|(coords, agents)| {
                 let cell_center = self.get_cell_center(*coords);
                 let dist = (cell_center - pos_coords).magnitude();
@@ -166,10 +171,7 @@ impl Space for GridSpace {
             .collect();
 
         distances.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
-        distances.into_iter()
-            .take(k)
-            .map(|(id, _)| id)
-            .collect()
+        distances.into_iter().take(k).map(|(id, _)| id).collect()
     }
 
     fn bounds(&self) -> Bounds {
@@ -197,10 +199,13 @@ impl Space for GridSpace {
     }
 
     fn positions(&self) -> Vec<(AgentId, Position)> {
-        self.cells.iter()
+        self.cells
+            .iter()
             .flat_map(|(coords, agents)| {
                 let pos = self.get_cell_center(*coords);
-                agents.iter().map(move |agent_id| (agent_id.clone(), Position::Grid(pos.clone())))
+                agents
+                    .iter()
+                    .map(move |agent_id| (agent_id.clone(), Position::Grid(pos.clone())))
             })
             .collect()
     }
@@ -209,4 +214,4 @@ impl Space for GridSpace {
         let bounds = self.bounds();
         SpaceExtent::Grid(bounds)
     }
-} 
+}

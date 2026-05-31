@@ -1,5 +1,5 @@
 //! Advanced Agent Architectures
-//! 
+//!
 //! This module provides implementations of sophisticated agent architectures:
 //! - Belief-Desire-Intention (BDI) agents
 //! - Cognitive agents with learning capabilities
@@ -18,8 +18,8 @@ use tokio::sync::broadcast;
 use uuid::Uuid;
 
 use crate::{
-    Agent, AgentContext, AgentError, AgentMemory, CommunicationIntent, Goal, Message, MessageContent,
-    PlanStatus, Position, Priority,
+    Agent, AgentContext, AgentError, AgentMemory, CommunicationIntent, Goal, Message,
+    MessageContent, PlanStatus, Position, Priority,
 };
 
 /// BDI agent implementation
@@ -27,25 +27,25 @@ use crate::{
 pub struct BDIAgent {
     /// Agent ID
     pub id: Uuid,
-    
+
     /// Current beliefs about world state
     pub beliefs: HashMap<String, serde_json::Value>,
-    
+
     /// Current desires (goals)
     pub desires: Vec<crate::Goal>,
-    
+
     /// Current intentions (selected goals with plans)
     pub intentions: VecDeque<Intention>,
-    
+
     /// Agent memory
     pub memory: Option<AgentMemory>,
-    
+
     /// Current state
     pub state: BDIState,
-    
+
     /// Plans for goals
     pub plans: Vec<Plan>,
-    
+
     /// Configuration for BDI agent
     pub config: BDIConfig,
 }
@@ -55,13 +55,13 @@ pub struct BDIAgent {
 pub struct BDIState {
     /// Current position
     pub position: Position,
-    
+
     /// Current energy level
     pub energy: f64,
-    
+
     /// Current resources
     pub resources: HashMap<String, f64>,
-    
+
     /// Current relationships
     pub relationships: HashMap<Uuid, f64>,
 }
@@ -71,13 +71,13 @@ pub struct BDIState {
 pub enum Condition {
     /// Boolean condition
     Boolean(String, bool),
-    
+
     /// Numeric comparison
     Numeric(String, NumericOperator, f64),
-    
+
     /// String comparison
     String(String, StringOperator, String),
-    
+
     /// Complex condition combining others
     Complex(Vec<Condition>, LogicalOperator),
 }
@@ -181,19 +181,19 @@ impl Agent for BDIAgent {
 
     async fn observe(&self, ctx: &AgentContext) -> Result<Self::Observation, AgentError> {
         let mut obs = HashMap::new();
-        
+
         // Get neighbors
         let neighbors = ctx.space.get_neighbors(self.id, 10.0).await?;
         obs.insert("neighbors".into(), serde_json::to_value(neighbors)?);
-        
+
         // Get current position
         let pos = ctx.space.get_agent_position(self.id).await?;
         obs.insert("position".into(), serde_json::to_value(pos)?);
-        
+
         // Get resources (simplified - just count them)
         let resources_count = ctx.resources.len();
         obs.insert("resources".into(), serde_json::to_value(resources_count)?);
-        
+
         Ok(obs)
     }
 
@@ -214,14 +214,20 @@ impl Agent for BDIAgent {
         }
     }
 
-    async fn act(&mut self, action: &Self::Action, ctx: &mut AgentContext) -> Result<(), AgentError> {
+    async fn act(
+        &mut self,
+        action: &Self::Action,
+        ctx: &mut AgentContext,
+    ) -> Result<(), AgentError> {
         match action {
             serde_json::Value::Object(obj) if obj.contains_key("action") => {
                 if let Some(serde_json::Value::String(action_type)) = obj.get("action") {
                     match action_type.as_str() {
                         "move" => {
                             if let Some(pos_value) = obj.get("position") {
-                                if let Ok(pos) = serde_json::from_value::<Position>(pos_value.clone()) {
+                                if let Ok(pos) =
+                                    serde_json::from_value::<Position>(pos_value.clone())
+                                {
                                     // TODO: Fix Arc mutability issue here
                                     // ctx.space.move_agent(self.id, pos).await?;
                                 }
@@ -229,7 +235,9 @@ impl Agent for BDIAgent {
                         }
                         "communicate" => {
                             if let Some(msg_value) = obj.get("message") {
-                                if let Ok(msg) = serde_json::from_value::<Message>(msg_value.clone()) {
+                                if let Ok(msg) =
+                                    serde_json::from_value::<Message>(msg_value.clone())
+                                {
                                     if let Some(channel) = ctx.channels.get("default") {
                                         // TODO: Fix Arc mutability issue here
                                         // self.send_message(&channel, msg).await?;
@@ -250,7 +258,8 @@ impl Agent for BDIAgent {
         // Update beliefs based on message
         match msg.content {
             crate::MessageContent::Text(text) => {
-                self.beliefs.insert("last_message".into(), serde_json::to_value(text)?);
+                self.beliefs
+                    .insert("last_message".into(), serde_json::to_value(text)?);
             }
             crate::MessageContent::Json(data) => {
                 for (key, value) in data.as_object().unwrap() {
@@ -259,7 +268,7 @@ impl Agent for BDIAgent {
             }
             _ => {}
         }
-        
+
         Ok(())
     }
 
@@ -287,7 +296,7 @@ impl BDIAgent {
             config: BDIConfig::default(),
         }
     }
-    
+
     /// Check if goal preconditions are met
     fn check_preconditions(&self, goal: &crate::Goal) -> bool {
         // Handle preconditions as serde_json::Value
@@ -305,16 +314,16 @@ impl BDIAgent {
             true
         }
     }
-    
+
     /// Evaluate condition against current beliefs
     fn evaluate_condition(&self, condition: &Condition) -> bool {
         match condition {
-            Condition::Boolean(key, value) => {
-                self.beliefs.get(key)
-                    .and_then(|v| v.as_bool())
-                    .map(|v| v == *value)
-                    .unwrap_or(false)
-            }
+            Condition::Boolean(key, value) => self
+                .beliefs
+                .get(key)
+                .and_then(|v| v.as_bool())
+                .map(|v| v == *value)
+                .unwrap_or(false),
             Condition::Numeric(key, op, value) => {
                 if let Some(belief) = self.beliefs.get(key).and_then(|v| v.as_f64()) {
                     match op {
@@ -342,28 +351,26 @@ impl BDIAgent {
                     false
                 }
             }
-            Condition::Complex(conditions, op) => {
-                match op {
-                    LogicalOperator::And => conditions.iter().all(|c| self.evaluate_condition(c)),
-                    LogicalOperator::Or => conditions.iter().any(|c| self.evaluate_condition(c)),
-                    LogicalOperator::Not => !conditions.iter().all(|c| self.evaluate_condition(c)),
-                }
-            }
+            Condition::Complex(conditions, op) => match op {
+                LogicalOperator::And => conditions.iter().all(|c| self.evaluate_condition(c)),
+                LogicalOperator::Or => conditions.iter().any(|c| self.evaluate_condition(c)),
+                LogicalOperator::Not => !conditions.iter().all(|c| self.evaluate_condition(c)),
+            },
         }
     }
-    
+
     /// Generate plan for goal
     fn generate_plan(&self, _goal: &crate::Goal) -> Result<Plan, AgentError> {
         // Simple plan generation
         let mut steps = Vec::new();
-        
+
         // Add some example steps
         steps.push(PlanStep {
             action: "move".to_string(),
             parameters: serde_json::json!({"direction": "forward"}),
             expected_duration: 1.0,
         });
-        
+
         steps.push(PlanStep {
             action: "observe".to_string(),
             parameters: serde_json::json!({"range": 10.0}),
@@ -379,7 +386,10 @@ impl BDIAgent {
     }
 
     /// Generate desires based on observation
-    pub async fn generate_desires(&self, obs: &<Self as Agent>::Observation) -> Result<Vec<Desire>, AgentError> {
+    pub async fn generate_desires(
+        &self,
+        obs: &<Self as Agent>::Observation,
+    ) -> Result<Vec<Desire>, AgentError> {
         let mut desires = Vec::new();
         if let Some(position) = obs.get("position") {
             desires.push(Desire {
@@ -398,7 +408,10 @@ impl BDIAgent {
     }
 
     /// Select intention from desires
-    pub async fn select_intention(&self, desires: &Vec<Desire>) -> Result<Option<Intention>, AgentError> {
+    pub async fn select_intention(
+        &self,
+        desires: &Vec<Desire>,
+    ) -> Result<Option<Intention>, AgentError> {
         if let Some(desire) = desires.first() {
             let plan = self.generate_plan(&desire.goal)?;
             let intention = Intention {
@@ -417,7 +430,11 @@ impl BDIAgent {
     }
 
     /// Send a message
-    pub async fn send_message(&self, channel: &broadcast::Sender<Message>, msg: Message) -> Result<(), AgentError> {
+    pub async fn send_message(
+        &self,
+        channel: &broadcast::Sender<Message>,
+        msg: Message,
+    ) -> Result<(), AgentError> {
         channel.send(msg).map_err(|e| AgentError::Communication {
             kind: crate::CommunicationErrorKind::SendFailed,
             message: format!("Failed to send message: {}", e),
@@ -428,12 +445,17 @@ impl BDIAgent {
 
     /// Update beliefs from a message
     pub async fn update_beliefs_from_message(&mut self, text: &str) -> Result<(), AgentError> {
-        self.beliefs.insert("last_message".into(), serde_json::to_value(text)?);
+        self.beliefs
+            .insert("last_message".into(), serde_json::to_value(text)?);
         Ok(())
     }
 
     /// Execute an intention
-    pub async fn execute_intention(&self, intention: &Intention, obs: &<Self as Agent>::Observation) -> Result<<Self as Agent>::Action, AgentError> {
+    pub async fn execute_intention(
+        &self,
+        intention: &Intention,
+        obs: &<Self as Agent>::Observation,
+    ) -> Result<<Self as Agent>::Action, AgentError> {
         match intention.action.as_str() {
             "move" => {
                 let pos = Position::Vec2(0.0, 1.0); // Example position
@@ -456,14 +478,12 @@ impl BDIAgent {
                     "message": msg
                 }))
             }
-            _ => {
-                Ok(serde_json::json!({
-                    "action": "wait"
-                }))
-            }
+            _ => Ok(serde_json::json!({
+                "action": "wait"
+            })),
         }
     }
 }
 
 // Additional agent architectures (Cognitive, Reactive, etc.) would be implemented here
-// ... implementation of other agent architectures ... 
+// ... implementation of other agent architectures ...

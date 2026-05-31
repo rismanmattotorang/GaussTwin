@@ -1,20 +1,16 @@
-use std::sync::Arc;
-use axum::{
-    routing::get,
-    Router,
-    Extension,
+use crate::{
+    error::Result,
+    graphql::{create_schema, Event, MutationRoot, QueryRoot, SubscriptionRoot},
+    rest,
+    websocket::WebSocketServer,
+    AppState,
 };
-use async_graphql::http::{GraphQLPlaygroundConfig, playground_source};
+use async_graphql::http::{playground_source, GraphQLPlaygroundConfig};
 use async_graphql_axum::{GraphQLRequest, GraphQLResponse};
+use axum::{routing::get, Extension, Router};
+use std::sync::Arc;
 use tokio::sync::broadcast;
 use tracing::info;
-use crate::{
-    AppState,
-    error::Result,
-    graphql::{QueryRoot, MutationRoot, SubscriptionRoot, create_schema, Event},
-    websocket::WebSocketServer,
-    rest,
-};
 
 /// Server instance
 pub struct Server {
@@ -28,7 +24,7 @@ impl Server {
     /// Create a new server instance
     pub fn new(state: AppState) -> Self {
         let (shutdown_tx, _) = broadcast::channel(1);
-        
+
         Self {
             state: Arc::new(state),
             shutdown: shutdown_tx,
@@ -39,7 +35,7 @@ impl Server {
     pub async fn start(&self) -> Result<()> {
         // Create event broadcast channel for GraphQL subscriptions
         let (event_tx, _) = broadcast::channel::<Event>(1000);
-        
+
         // Create GraphQL schema
         let schema = create_schema(self.state.clone(), event_tx.clone());
 
@@ -62,7 +58,7 @@ impl Server {
 
         // Get server address
         let http_addr = self.state.config.http.addr;
-        
+
         info!("🚀 GaussTwin API Server starting...");
         info!("   HTTP Server:   http://{}", http_addr);
         info!("   REST API:      http://{}/api/v1", http_addr);
@@ -74,7 +70,7 @@ impl Server {
         let server = axum::Server::bind(&http_addr)
             .serve(router.into_make_service())
             .with_graceful_shutdown(shutdown_signal(self.shutdown.subscribe()));
-        
+
         if let Err(e) = server.await {
             tracing::error!("Server error: {}", e);
         }
@@ -131,7 +127,7 @@ async fn health_handler(
     axum::extract::State(state): axum::extract::State<Arc<AppState>>,
 ) -> impl axum::response::IntoResponse {
     state.metrics.increment_counter("api.health.calls", 1, None);
-    
+
     axum::Json(serde_json::json!({
         "status": "ok",
         "timestamp": chrono::Utc::now().to_rfc3339(),
@@ -151,11 +147,11 @@ async fn shutdown_signal(mut shutdown: broadcast::Receiver<()>) {
             .await
             .expect("failed to install Ctrl+C handler");
     };
-    
+
     let shutdown_recv = async {
         let _ = shutdown.recv().await;
     };
-    
+
     tokio::select! {
         _ = ctrl_c => {
             info!("Received Ctrl+C, shutting down...");
@@ -195,4 +191,4 @@ mod tests {
             .unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
     }
-} 
+}

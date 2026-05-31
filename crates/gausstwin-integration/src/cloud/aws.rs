@@ -303,7 +303,11 @@ impl AWSConnector {
     }
 
     /// List objects in S3 bucket
-    pub async fn s3_list_objects(&self, bucket: &str, prefix: Option<&str>) -> Result<Vec<S3Object>> {
+    pub async fn s3_list_objects(
+        &self,
+        bucket: &str,
+        prefix: Option<&str>,
+    ) -> Result<Vec<S3Object>> {
         let start = Instant::now();
 
         let objects = {
@@ -394,11 +398,16 @@ impl AWSConnector {
             let tables = self.state.dynamo_tables.read().await;
             if let Some(table) = tables.get(table_name) {
                 // Simplified key matching
-                table.iter().find(|item| {
-                    key.iter().all(|(k, v)| {
-                        item.get(k).map(|iv| format!("{:?}", iv) == format!("{:?}", v)).unwrap_or(false)
+                table
+                    .iter()
+                    .find(|item| {
+                        key.iter().all(|(k, v)| {
+                            item.get(k)
+                                .map(|iv| format!("{:?}", iv) == format!("{:?}", v))
+                                .unwrap_or(false)
+                        })
                     })
-                }).cloned()
+                    .cloned()
             } else {
                 return Err(Error::NotFound(format!("Table not found: {}", table_name)));
             }
@@ -443,7 +452,10 @@ impl AWSConnector {
     pub async fn sqs_create_queue(&self, queue_name: &str) -> Result<String> {
         let start = Instant::now();
 
-        let queue_url = format!("https://sqs.{}.amazonaws.com/123456789012/{}", self.config.region, queue_name);
+        let queue_url = format!(
+            "https://sqs.{}.amazonaws.com/123456789012/{}",
+            self.config.region, queue_name
+        );
 
         {
             let mut queues = self.state.sqs_queues.write().await;
@@ -645,9 +657,15 @@ impl AWSConnector {
         };
 
         let total_ops = self.internal_metrics.s3_operations.load(Ordering::Relaxed)
-            + self.internal_metrics.dynamo_operations.load(Ordering::Relaxed)
+            + self
+                .internal_metrics
+                .dynamo_operations
+                .load(Ordering::Relaxed)
             + self.internal_metrics.sqs_operations.load(Ordering::Relaxed)
-            + self.internal_metrics.lambda_invocations.load(Ordering::Relaxed)
+            + self
+                .internal_metrics
+                .lambda_invocations
+                .load(Ordering::Relaxed)
             + self.internal_metrics.iot_operations.load(Ordering::Relaxed);
 
         Metrics {
@@ -661,7 +679,10 @@ impl AWSConnector {
             messages_received: 0,
             errors: self.internal_metrics.errors.load(Ordering::Relaxed),
             average_latency_ms: avg_latency,
-            bytes_sent: self.internal_metrics.bytes_transferred.load(Ordering::Relaxed),
+            bytes_sent: self
+                .internal_metrics
+                .bytes_transferred
+                .load(Ordering::Relaxed),
             bytes_received: 0,
             uptime_seconds: uptime,
         }
@@ -748,18 +769,30 @@ mod tests {
 
         // Put object
         let data = b"Hello, World!".to_vec();
-        connector.s3_put_object("test-bucket", "test-key", data.clone()).await.unwrap();
+        connector
+            .s3_put_object("test-bucket", "test-key", data.clone())
+            .await
+            .unwrap();
 
         // Get object
-        let retrieved = connector.s3_get_object("test-bucket", "test-key").await.unwrap();
+        let retrieved = connector
+            .s3_get_object("test-bucket", "test-key")
+            .await
+            .unwrap();
         assert_eq!(retrieved, data);
 
         // List objects
-        let objects = connector.s3_list_objects("test-bucket", None).await.unwrap();
+        let objects = connector
+            .s3_list_objects("test-bucket", None)
+            .await
+            .unwrap();
         assert_eq!(objects.len(), 1);
 
         // Delete object
-        connector.s3_delete_object("test-bucket", "test-key").await.unwrap();
+        connector
+            .s3_delete_object("test-bucket", "test-key")
+            .await
+            .unwrap();
     }
 
     #[tokio::test]
@@ -772,11 +805,17 @@ mod tests {
         let queue_url = connector.sqs_create_queue("test-queue").await.unwrap();
 
         // Send message
-        let message_id = connector.sqs_send_message(&queue_url, "Test message").await.unwrap();
+        let message_id = connector
+            .sqs_send_message(&queue_url, "Test message")
+            .await
+            .unwrap();
         assert!(!message_id.is_empty());
 
         // Receive messages
-        let messages = connector.sqs_receive_messages(&queue_url, 10).await.unwrap();
+        let messages = connector
+            .sqs_receive_messages(&queue_url, 10)
+            .await
+            .unwrap();
         assert_eq!(messages.len(), 1);
         assert_eq!(messages[0].body, "Test message");
     }

@@ -1,6 +1,6 @@
-use serde::{Serialize, Deserialize};
-use std::collections::HashMap;
 use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use uuid::Uuid;
 
 pub type DashboardId = Uuid;
@@ -73,12 +73,18 @@ impl Dashboard {
     pub fn new(config: DashboardConfig) -> Self {
         Self {
             id: Uuid::new_v4(),
-            widgets: config.widgets
+            widgets: config
+                .widgets
                 .iter()
-                .map(|w| (w.title.clone(), Widget {
-                    config: w.clone(),
-                    data: Vec::new(),
-                }))
+                .map(|w| {
+                    (
+                        w.title.clone(),
+                        Widget {
+                            config: w.clone(),
+                            data: Vec::new(),
+                        },
+                    )
+                })
                 .collect(),
             config,
             last_update: Utc::now(),
@@ -92,29 +98,23 @@ impl Dashboard {
     pub async fn update(&mut self) -> crate::Result<()> {
         // Collect data sources first to avoid borrow checker issues
         let mut widget_updates = Vec::new();
-        
+
         for (title, widget) in &self.widgets {
             let data = match &widget.config.data_source {
-                DataSource::Metrics(path) => {
-                    self.fetch_metrics(path).await?
-                }
-                DataSource::Query(query) => {
-                    self.execute_query(query).await?
-                }
-                DataSource::Stream(stream) => {
-                    self.process_stream(stream).await?
-                }
+                DataSource::Metrics(path) => self.fetch_metrics(path).await?,
+                DataSource::Query(query) => self.execute_query(query).await?,
+                DataSource::Stream(stream) => self.process_stream(stream).await?,
             };
             widget_updates.push((title.clone(), data));
         }
-        
+
         // Now update the widgets with collected data
         for (title, data) in widget_updates {
             if let Some(widget) = self.widgets.get_mut(&title) {
                 widget.data.extend(data);
             }
         }
-        
+
         self.last_update = Utc::now();
         Ok(())
     }
@@ -138,4 +138,4 @@ impl Dashboard {
         // TODO: Implement dashboard rendering
         Ok(String::new())
     }
-} 
+}

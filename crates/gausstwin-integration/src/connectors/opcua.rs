@@ -321,7 +321,7 @@ impl OpcUaConnector {
     /// Create a new OPC UA connector
     pub async fn new(config: Config) -> Result<Self> {
         let opcua_config = Self::parse_opcua_config(&config)?;
-        Ok(Self { 
+        Ok(Self {
             config,
             opcua_config,
             state: Arc::new(ConnectorState::default()),
@@ -506,10 +506,7 @@ impl OpcUaConnector {
     }
 
     /// Create a subscription
-    pub async fn create_subscription(
-        &self,
-        publishing_interval_ms: u32,
-    ) -> Result<u32> {
+    pub async fn create_subscription(&self, publishing_interval_ms: u32) -> Result<u32> {
         if !self.state.connected.load(Ordering::SeqCst) {
             return Err(Error::Connection("Not connected".to_string()));
         }
@@ -658,13 +655,16 @@ impl OpcUaConnector {
 #[async_trait]
 impl Connector for OpcUaConnector {
     async fn connect(&mut self) -> Result<()> {
-        info!("Connecting to OPC UA server at {}", self.opcua_config.endpoint_url);
+        info!(
+            "Connecting to OPC UA server at {}",
+            self.opcua_config.endpoint_url
+        );
 
         // Simulate connection - in production this would:
         // 1. Create secure channel
         // 2. Create session
         // 3. Activate session with authentication
-        
+
         self.state.connected.store(true, Ordering::SeqCst);
         *self.internal_metrics.connected_at.write().await = Some(Instant::now());
         *self.state.session_id.write().await = Some(uuid::Uuid::new_v4().to_string());

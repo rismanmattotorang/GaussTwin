@@ -173,7 +173,7 @@ pub struct GCPConnector {
 impl GCPConnector {
     /// Create a new GCP connector
     pub fn new(config: GCPConfig) -> Self {
-        Self { 
+        Self {
             config,
             state: Arc::new(ConnectorState::default()),
             internal_metrics: Arc::new(InternalMetrics::default()),
@@ -210,7 +210,12 @@ impl GCPConnector {
     }
 
     /// Upload object
-    pub async fn storage_upload(&self, bucket: &str, object_name: &str, data: Vec<u8>) -> Result<StorageObject> {
+    pub async fn storage_upload(
+        &self,
+        bucket: &str,
+        object_name: &str,
+        data: Vec<u8>,
+    ) -> Result<StorageObject> {
         let start = Instant::now();
 
         let md5_hash = format!("{:x}", md5::compute(&data));
@@ -292,7 +297,11 @@ impl GCPConnector {
     }
 
     /// List objects
-    pub async fn storage_list(&self, bucket: &str, prefix: Option<&str>) -> Result<Vec<StorageObject>> {
+    pub async fn storage_list(
+        &self,
+        bucket: &str,
+        prefix: Option<&str>,
+    ) -> Result<Vec<StorageObject>> {
         let start = Instant::now();
 
         let objects = {
@@ -478,7 +487,10 @@ impl GCPConnector {
             .fetch_add(1, Ordering::Relaxed);
         self.record_latency(start.elapsed()).await;
 
-        info!("Created Pub/Sub subscription: {} -> {}", subscription_name, topic_name);
+        info!(
+            "Created Pub/Sub subscription: {} -> {}",
+            subscription_name, topic_name
+        );
         Ok(())
     }
 
@@ -627,15 +639,16 @@ impl GCPConnector {
     }
 
     /// Send device config
-    pub async fn iot_send_config(&self, device_id: &str, config_data: Vec<u8>) -> Result<DeviceConfig> {
+    pub async fn iot_send_config(
+        &self,
+        device_id: &str,
+        config_data: Vec<u8>,
+    ) -> Result<DeviceConfig> {
         let start = Instant::now();
 
         let device_config = {
             let mut configs = self.state.iot_configs.write().await;
-            let version = configs
-                .get(device_id)
-                .map(|c| c.version + 1)
-                .unwrap_or(1);
+            let version = configs.get(device_id).map(|c| c.version + 1).unwrap_or(1);
 
             let config = DeviceConfig {
                 device_id: device_id.to_string(),
@@ -673,19 +686,35 @@ impl GCPConnector {
             }
         };
 
-        let total_ops = self.internal_metrics.storage_operations.load(Ordering::Relaxed)
-            + self.internal_metrics.firestore_operations.load(Ordering::Relaxed)
-            + self.internal_metrics.pubsub_operations.load(Ordering::Relaxed)
+        let total_ops = self
+            .internal_metrics
+            .storage_operations
+            .load(Ordering::Relaxed)
+            + self
+                .internal_metrics
+                .firestore_operations
+                .load(Ordering::Relaxed)
+            + self
+                .internal_metrics
+                .pubsub_operations
+                .load(Ordering::Relaxed)
             + self.internal_metrics.iot_operations.load(Ordering::Relaxed);
 
         Metrics {
-            connections: if self.state.connected.load(Ordering::SeqCst) { 1 } else { 0 },
+            connections: if self.state.connected.load(Ordering::SeqCst) {
+                1
+            } else {
+                0
+            },
             connection_failures: 0,
             messages_sent: total_ops,
             messages_received: 0,
             errors: self.internal_metrics.errors.load(Ordering::Relaxed),
             average_latency_ms: avg_latency,
-            bytes_sent: self.internal_metrics.bytes_transferred.load(Ordering::Relaxed),
+            bytes_sent: self
+                .internal_metrics
+                .bytes_transferred
+                .load(Ordering::Relaxed),
             bytes_received: 0,
             uptime_seconds: uptime,
         }
@@ -760,12 +789,21 @@ mod tests {
         let mut connector = GCPConnector::new(config);
         connector.connect().await.unwrap();
 
-        connector.storage_create_bucket("test-bucket").await.unwrap();
+        connector
+            .storage_create_bucket("test-bucket")
+            .await
+            .unwrap();
 
         let data = b"Hello, GCP!".to_vec();
-        connector.storage_upload("test-bucket", "test-object", data.clone()).await.unwrap();
+        connector
+            .storage_upload("test-bucket", "test-object", data.clone())
+            .await
+            .unwrap();
 
-        let retrieved = connector.storage_download("test-bucket", "test-object").await.unwrap();
+        let retrieved = connector
+            .storage_download("test-bucket", "test-object")
+            .await
+            .unwrap();
         assert_eq!(retrieved, data);
     }
 
@@ -776,7 +814,10 @@ mod tests {
         connector.connect().await.unwrap();
 
         connector.pubsub_create_topic("test-topic").await.unwrap();
-        connector.pubsub_create_subscription("test-sub", "test-topic").await.unwrap();
+        connector
+            .pubsub_create_subscription("test-sub", "test-topic")
+            .await
+            .unwrap();
 
         let message_id = connector
             .pubsub_publish("test-topic", b"Test message".to_vec(), HashMap::new())

@@ -1,7 +1,7 @@
 //! API server implementation
 
-use std::sync::Arc;
 use crate::{AppState, Error, Result, ServerConfig};
+use std::sync::Arc;
 
 /// API server configuration
 #[derive(Debug, Clone)]
@@ -63,4 +63,4 @@ impl ApiServer {
             "status": "ok"
         }))
     }
-} 
+}

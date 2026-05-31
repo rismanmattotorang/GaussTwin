@@ -9,15 +9,15 @@
 //! - Load balancing and dynamic partitioning
 //! - Fault tolerance and checkpointing
 
+use crossbeam_channel::{bounded, Receiver, Sender};
+use parking_lot::{Mutex, RwLock};
+use serde::{Deserialize, Serialize};
+use std::cmp::Ordering as CmpOrdering;
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::Arc;
-use std::cmp::Ordering as CmpOrdering;
-use std::time::{Duration, Instant};
 use std::thread::{self, JoinHandle};
-use parking_lot::{Mutex, RwLock};
-use crossbeam_channel::{bounded, Sender, Receiver};
-use serde::{Deserialize, Serialize};
+use std::time::{Duration, Instant};
 
 use crate::agent::AgentId;
 use crate::error::{GaussTwinError, Result};
@@ -109,7 +109,7 @@ impl Task {
             deadline: None,
         }
     }
-    
+
     /// Set a deadline for the task
     pub fn with_deadline(mut self, deadline: Instant) -> Self {
         self.deadline = Some(deadline);
@@ -121,14 +121,12 @@ impl Task {
 impl Ord for Task {
     fn cmp(&self, other: &Self) -> CmpOrdering {
         match self.priority.cmp(&other.priority).reverse() {
-            CmpOrdering::Equal => {
-                match (&self.deadline, &other.deadline) {
-                    (Some(a), Some(b)) => a.cmp(b),
-                    (Some(_), None) => CmpOrdering::Less,
-                    (None, Some(_)) => CmpOrdering::Greater,
-                    (None, None) => self.created_at.cmp(&other.created_at),
-                }
-            }
+            CmpOrdering::Equal => match (&self.deadline, &other.deadline) {
+                (Some(a), Some(b)) => a.cmp(b),
+                (Some(_), None) => CmpOrdering::Less,
+                (None, Some(_)) => CmpOrdering::Greater,
+                (None, None) => self.created_at.cmp(&other.created_at),
+            },
             ord => ord,
         }
     }
@@ -199,7 +197,7 @@ impl ThreadPool {
     pub fn new() -> Result<Self> {
         Self::with_config(HpcConfig::default())
     }
-    
+
     /// Create a new thread pool with custom configuration
     pub fn with_config(config: HpcConfig) -> Result<Self> {
         let num_workers = if config.num_workers == 0 {
@@ -207,20 +205,20 @@ impl ThreadPool {
         } else {
             config.num_workers
         };
-        
+
         let (task_sender, task_receiver) = bounded(config.queue_capacity);
         let shutdown = Arc::new(AtomicBool::new(false));
         let stats = Arc::new(RwLock::new(ThreadPoolStats::default()));
         let active_tasks = Arc::new(AtomicUsize::new(0));
-        
+
         let task_receiver = Arc::new(Mutex::new(task_receiver));
-        
+
         // Create workers
         let mut workers = Vec::with_capacity(num_workers);
         let all_local_queues: Vec<Arc<Mutex<VecDeque<Task>>>> = (0..num_workers)
             .map(|_| Arc::new(Mutex::new(VecDeque::new())))
             .collect();
-        
+
         for id in 0..num_workers {
             let shutdown = Arc::clone(&shutdown);
             let stats = Arc::clone(&stats);
@@ -230,7 +228,7 @@ impl ThreadPool {
             let tasks_completed_clone = Arc::clone(&tasks_completed);
             let active_tasks = Arc::clone(&active_tasks);
             let work_stealing = config.work_stealing;
-            
+
             // Clone all local queues for work stealing
             let steal_queues: Vec<Arc<Mutex<VecDeque<Task>>>> = all_local_queues
                 .iter()
@@ -238,7 +236,7 @@ impl ThreadPool {
                 .filter(|(i, _)| *i != id)
                 .map(|(_, q)| Arc::clone(q))
                 .collect();
-            
+
             let handle = thread::Builder::new()
                 .name(format!("gausstwin-worker-{}", id))
                 .spawn(move || {
@@ -255,7 +253,7 @@ impl ThreadPool {
                     );
                 })
                 .map_err(|e| GaussTwinError::ThreadPoolError(e.to_string()))?;
-            
+
             workers.push(Worker {
                 id,
                 handle: Some(handle),
@@ -263,9 +261,9 @@ impl ThreadPool {
                 tasks_completed,
             });
         }
-        
+
         tracing::info!("Thread pool created with {} workers", num_workers);
-        
+
         Ok(Self {
             config,
             workers,
@@ -276,7 +274,7 @@ impl ThreadPool {
             active_tasks,
         })
     }
-    
+
     fn worker_loop(
         id: usize,
         shutdown: Arc<AtomicBool>,
@@ -294,13 +292,13 @@ impl ThreadPool {
                 let mut queue = local_queue.lock();
                 queue.pop_front()
             };
-            
+
             let task = task.or_else(|| {
                 // Try global queue
                 let receiver = task_receiver.lock();
                 receiver.try_recv().ok()
             });
-            
+
             let task = task.or_else(|| {
                 // Try work stealing
                 if work_stealing {
@@ -313,7 +311,7 @@ impl ThreadPool {
                 }
                 None
             });
-            
+
             if let Some(task) = task {
                 // Note: `active_tasks` is incremented at submit time (it counts
                 // outstanding pending+in-flight tasks); the worker only decrements
@@ -322,14 +320,14 @@ impl ThreadPool {
 
                 // Execute the task
                 (task.work)();
-                
+
                 let elapsed = start.elapsed();
-                
+
                 // Update statistics
                 {
                     let mut stats = stats.write();
                     stats.tasks_completed += 1;
-                    
+
                     // Update latency tracking
                     let latency = task.created_at.elapsed();
                     if stats.avg_latency == Duration::ZERO {
@@ -340,7 +338,7 @@ impl ThreadPool {
                     if latency > stats.max_latency {
                         stats.max_latency = latency;
                     }
-                    
+
                     // Check deadline
                     if let Some(deadline) = task.deadline {
                         if Instant::now() > deadline {
@@ -348,7 +346,7 @@ impl ThreadPool {
                         }
                     }
                 }
-                
+
                 tasks_completed.fetch_add(1, Ordering::Relaxed);
                 active_tasks.fetch_sub(1, Ordering::Relaxed);
             } else {
@@ -356,10 +354,10 @@ impl ThreadPool {
                 thread::yield_now();
             }
         }
-        
+
         tracing::debug!("Worker {} shutting down", id);
     }
-    
+
     /// Submit a task to the thread pool
     pub fn submit<F>(&self, priority: TaskPriority, work: F) -> Result<u64>
     where
@@ -372,12 +370,10 @@ impl ThreadPool {
         // `wait_idle()` waits on this counter, so it must include pending (queued
         // but not yet started) tasks, not only in-flight ones.
         self.active_tasks.fetch_add(1, Ordering::SeqCst);
-        self.task_sender
-            .send(task)
-            .map_err(|_| {
-                self.active_tasks.fetch_sub(1, Ordering::SeqCst);
-                GaussTwinError::ThreadPoolError("Failed to submit task".to_string())
-            })?;
+        self.task_sender.send(task).map_err(|_| {
+            self.active_tasks.fetch_sub(1, Ordering::SeqCst);
+            GaussTwinError::ThreadPoolError("Failed to submit task".to_string())
+        })?;
 
         self.stats.write().tasks_submitted += 1;
 
@@ -398,65 +394,64 @@ impl ThreadPool {
         let task = Task::new(task_id, priority, work).with_deadline(deadline);
 
         self.active_tasks.fetch_add(1, Ordering::SeqCst);
-        self.task_sender
-            .send(task)
-            .map_err(|_| {
-                self.active_tasks.fetch_sub(1, Ordering::SeqCst);
-                GaussTwinError::ThreadPoolError("Failed to submit task".to_string())
-            })?;
+        self.task_sender.send(task).map_err(|_| {
+            self.active_tasks.fetch_sub(1, Ordering::SeqCst);
+            GaussTwinError::ThreadPoolError("Failed to submit task".to_string())
+        })?;
 
         self.stats.write().tasks_submitted += 1;
 
         Ok(task_id)
     }
-    
+
     /// Submit a batch of tasks
     pub fn submit_batch<F>(&self, priority: TaskPriority, tasks: Vec<F>) -> Result<Vec<u64>>
     where
         F: FnOnce() + Send + 'static,
     {
         let mut task_ids = Vec::with_capacity(tasks.len());
-        
+
         for work in tasks {
             let task_id = self.submit(priority, work)?;
             task_ids.push(task_id);
         }
-        
+
         Ok(task_ids)
     }
-    
+
     /// Wait for all tasks to complete
     pub fn wait_idle(&self) {
         while self.active_tasks.load(Ordering::Relaxed) > 0 {
             thread::yield_now();
         }
     }
-    
+
     /// Get thread pool statistics
     pub fn stats(&self) -> ThreadPoolStats {
         let mut stats = self.stats.read().clone();
         stats.queue_depth = self.active_tasks.load(Ordering::Relaxed);
-        
+
         // Calculate worker utilization
-        let total_completed: u64 = self.workers
+        let total_completed: u64 = self
+            .workers
             .iter()
             .map(|w| w.tasks_completed.load(Ordering::Relaxed))
             .sum();
-        
+
         if stats.tasks_completed > 0 {
             // Rough estimate of utilization
-            stats.worker_utilization = (self.active_tasks.load(Ordering::Relaxed) as f64)
-                / self.workers.len() as f64;
+            stats.worker_utilization =
+                (self.active_tasks.load(Ordering::Relaxed) as f64) / self.workers.len() as f64;
         }
-        
+
         stats
     }
-    
+
     /// Get number of workers
     pub fn num_workers(&self) -> usize {
         self.workers.len()
     }
-    
+
     /// Shutdown the thread pool
     pub fn shutdown(&self) {
         self.shutdown.store(true, Ordering::Relaxed);
@@ -472,7 +467,7 @@ impl Default for ThreadPool {
 impl Drop for ThreadPool {
     fn drop(&mut self) {
         self.shutdown();
-        
+
         for worker in &mut self.workers {
             if let Some(handle) = worker.handle.take() {
                 let _ = handle.join();
@@ -485,7 +480,7 @@ impl Drop for ThreadPool {
 pub mod parallel {
     use super::*;
     use std::sync::mpsc;
-    
+
     /// Execute a function in parallel over a slice
     pub fn parallel_for<T, F>(pool: &ThreadPool, data: &[T], f: F) -> Result<()>
     where
@@ -495,16 +490,16 @@ pub mod parallel {
         let chunk_size = (data.len() + pool.num_workers() - 1) / pool.num_workers();
         let data_ptr = data.as_ptr() as usize;
         let data_len = data.len();
-        
+
         let (tx, rx) = mpsc::channel();
         let num_chunks = (data_len + chunk_size - 1) / chunk_size;
-        
+
         for chunk_idx in 0..num_chunks {
             let start = chunk_idx * chunk_size;
             let end = (start + chunk_size).min(data_len);
             let f = f.clone();
             let tx = tx.clone();
-            
+
             pool.submit(TaskPriority::Normal, move || {
                 let data_ptr = data_ptr as *const T;
                 for i in start..end {
@@ -515,17 +510,17 @@ pub mod parallel {
                 let _ = tx.send(());
             })?;
         }
-        
+
         // Wait for all chunks to complete
         for _ in 0..num_chunks {
             let _ = rx.recv();
         }
-        
+
         Ok(())
     }
-    
+
     /// Map function in parallel
-    /// 
+    ///
     /// Note: T must be Clone to distribute across workers
     pub fn parallel_map<T, U, F>(pool: &ThreadPool, data: Vec<T>, f: F) -> Result<Vec<U>>
     where
@@ -536,29 +531,29 @@ pub mod parallel {
         if data.is_empty() {
             return Ok(Vec::new());
         }
-        
+
         let num_workers = pool.num_workers().max(1);
         let chunk_size = (data.len() + num_workers - 1) / num_workers;
         let (tx, rx) = mpsc::channel();
-        
+
         // Create chunks with indices
         let mut chunks: Vec<(usize, Vec<T>)> = Vec::new();
         for (idx, chunk) in data.chunks(chunk_size).enumerate() {
             chunks.push((idx, chunk.to_vec()));
         }
-        
+
         let num_chunks = chunks.len();
-        
+
         for (chunk_idx, chunk) in chunks {
             let f = f.clone();
             let tx = tx.clone();
-            
+
             pool.submit(TaskPriority::Normal, move || {
                 let results: Vec<U> = chunk.into_iter().map(&f).collect();
                 let _ = tx.send((chunk_idx, results));
             })?;
         }
-        
+
         // Collect results in order
         let mut all_results: Vec<(usize, Vec<U>)> = Vec::with_capacity(num_chunks);
         for _ in 0..num_chunks {
@@ -566,9 +561,12 @@ pub mod parallel {
                 all_results.push(result);
             }
         }
-        
+
         all_results.sort_by_key(|(idx, _)| *idx);
-        Ok(all_results.into_iter().flat_map(|(_, results)| results).collect())
+        Ok(all_results
+            .into_iter()
+            .flat_map(|(_, results)| results)
+            .collect())
     }
 }
 
@@ -576,7 +574,7 @@ pub mod parallel {
 #[cfg(target_os = "linux")]
 pub mod numa {
     use super::*;
-    
+
     /// Get the number of NUMA nodes
     pub fn num_nodes() -> usize {
         // Read from /sys/devices/system/node/
@@ -588,29 +586,31 @@ pub mod numa {
             })
             .unwrap_or(1)
     }
-    
+
     /// Get memory info for a NUMA node
     pub fn node_memory_info(node: usize) -> Option<(usize, usize)> {
         let path = format!("/sys/devices/system/node/node{}/meminfo", node);
         let content = std::fs::read_to_string(path).ok()?;
-        
+
         let mut total = 0usize;
         let mut free = 0usize;
-        
+
         for line in content.lines() {
             if line.contains("MemTotal:") {
-                total = line.split_whitespace()
+                total = line
+                    .split_whitespace()
                     .nth(3)
                     .and_then(|s| s.parse().ok())
                     .unwrap_or(0);
             } else if line.contains("MemFree:") {
-                free = line.split_whitespace()
+                free = line
+                    .split_whitespace()
                     .nth(3)
                     .and_then(|s| s.parse().ok())
                     .unwrap_or(0);
             }
         }
-        
+
         Some((total * 1024, free * 1024))
     }
 }
@@ -620,7 +620,7 @@ pub mod numa {
     pub fn num_nodes() -> usize {
         1
     }
-    
+
     pub fn node_memory_info(_node: usize) -> Option<(usize, usize)> {
         None
     }
@@ -629,7 +629,7 @@ pub mod numa {
 /// Distributed computing support
 pub mod distributed {
     use super::*;
-    
+
     /// Message types for distributed simulation
     #[derive(Debug, Clone, Serialize, Deserialize)]
     pub enum DistributedMessage {
@@ -640,9 +640,7 @@ pub mod distributed {
             state: Vec<u8>,
         },
         /// Synchronization barrier
-        Barrier {
-            step: u64,
-        },
+        Barrier { step: u64 },
         /// State synchronization
         SyncState {
             node_id: u32,
@@ -650,14 +648,11 @@ pub mod distributed {
             checksum: u64,
         },
         /// Heartbeat
-        Heartbeat {
-            node_id: u32,
-            timestamp: u64,
-        },
+        Heartbeat { node_id: u32, timestamp: u64 },
         /// Shutdown signal
         Shutdown,
     }
-    
+
     /// Node information for distributed simulation
     #[derive(Debug, Clone, Serialize, Deserialize)]
     pub struct NodeInfo {
@@ -672,7 +667,7 @@ pub mod distributed {
         /// Last heartbeat timestamp
         pub last_heartbeat: u64,
     }
-    
+
     /// Node status
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
     pub enum NodeStatus {
@@ -704,39 +699,41 @@ mod num_cpus {
 mod tests {
     use super::*;
     use std::sync::atomic::AtomicUsize;
-    
+
     #[test]
     fn test_thread_pool_creation() {
         let pool = ThreadPool::new().unwrap();
         assert!(pool.num_workers() > 0);
     }
-    
+
     #[test]
     fn test_task_submission() {
         let pool = ThreadPool::new().unwrap();
         let counter = Arc::new(AtomicUsize::new(0));
-        
+
         for _ in 0..100 {
             let counter = Arc::clone(&counter);
             pool.submit(TaskPriority::Normal, move || {
                 counter.fetch_add(1, Ordering::Relaxed);
-            }).unwrap();
+            })
+            .unwrap();
         }
-        
+
         pool.wait_idle();
-        
+
         assert_eq!(counter.load(Ordering::Relaxed), 100);
     }
-    
+
     #[test]
     fn test_task_priorities() {
         let pool = ThreadPool::with_config(HpcConfig {
             num_workers: 1, // Single worker for predictable ordering
             ..Default::default()
-        }).unwrap();
-        
+        })
+        .unwrap();
+
         let results = Arc::new(Mutex::new(Vec::new()));
-        
+
         // Submit tasks with different priorities
         for i in 0..10 {
             let results = Arc::clone(&results);
@@ -745,48 +742,50 @@ mod tests {
                 1 => TaskPriority::Normal,
                 _ => TaskPriority::High,
             };
-            
+
             pool.submit(priority, move || {
                 results.lock().push(i);
-            }).unwrap();
+            })
+            .unwrap();
         }
-        
+
         pool.wait_idle();
-        
+
         let results = results.lock();
         assert_eq!(results.len(), 10);
     }
-    
+
     #[test]
     fn test_parallel_map() {
         let pool = ThreadPool::new().unwrap();
-        
+
         let data: Vec<i32> = (0..1000).collect();
         let results = parallel::parallel_map(&pool, data, |x| x * 2).unwrap();
-        
+
         assert_eq!(results.len(), 1000);
         for (i, &result) in results.iter().enumerate() {
             assert_eq!(result, (i as i32) * 2);
         }
     }
-    
+
     #[test]
     fn test_thread_pool_stats() {
         let pool = ThreadPool::new().unwrap();
-        
+
         for _ in 0..50 {
             pool.submit(TaskPriority::Normal, || {
                 thread::sleep(Duration::from_millis(1));
-            }).unwrap();
+            })
+            .unwrap();
         }
-        
+
         pool.wait_idle();
-        
+
         let stats = pool.stats();
         assert_eq!(stats.tasks_submitted, 50);
         assert_eq!(stats.tasks_completed, 50);
     }
-    
+
     #[test]
     fn test_numa_info() {
         let nodes = numa::num_nodes();

@@ -1,5 +1,5 @@
 //! Error types for GaussTwin
-//! 
+//!
 //! This module provides comprehensive error handling for all GaussTwin operations.
 
 use crate::agent::AgentId;
@@ -158,7 +158,7 @@ impl GaussTwinError {
             | GaussTwinError::ServiceUnavailable(_)
             | GaussTwinError::ResourceExhausted(_)
             | GaussTwinError::ThreadPoolError(_) => true,
-            
+
             // Permanent failures that won't succeed on retry
             GaussTwinError::AgentNotFound(_)
             | GaussTwinError::AgentTypeNotFound(_)
@@ -169,66 +169,67 @@ impl GaussTwinError {
             | GaussTwinError::PermissionDenied(_)
             | GaussTwinError::NotImplemented(_)
             | GaussTwinError::NotSupported(_) => false,
-            
+
             // Other errors might be recoverable depending on context
             _ => false,
         }
     }
-    
+
     /// Get error category for telemetry and monitoring
     pub fn category(&self) -> ErrorCategory {
         match self {
             GaussTwinError::AgentNotFound(_)
             | GaussTwinError::AgentTypeNotFound(_)
             | GaussTwinError::InvalidAgentState(_) => ErrorCategory::Agent,
-            
+
             GaussTwinError::DimensionMismatch(_, _)
             | GaussTwinError::IndexOutOfBounds(_, _)
             | GaussTwinError::InvalidPosition(_)
             | GaussTwinError::OutOfBounds => ErrorCategory::Spatial,
-            
+
             GaussTwinError::InvalidTimeStep(_)
             | GaussTwinError::SchedulerError(_)
             | GaussTwinError::EventQueueOverflow => ErrorCategory::Time,
-            
+
             GaussTwinError::ModelNotInitialized
             | GaussTwinError::InvalidModelConfig(_)
             | GaussTwinError::ModelExecutionFailed(_) => ErrorCategory::Model,
-            
+
             GaussTwinError::DatabaseError(_)
             | GaussTwinError::SerializationError(_)
             | GaussTwinError::DeserializationError(_) => ErrorCategory::Persistence,
-            
+
             GaussTwinError::NetworkError(_)
             | GaussTwinError::ApiError(_)
             | GaussTwinError::AuthenticationFailed(_)
             | GaussTwinError::AuthorizationFailed(_) => ErrorCategory::Network,
-            
+
             GaussTwinError::VllmError(_)
             | GaussTwinError::MilvusError(_)
             | GaussTwinError::MlModelError(_)
             | GaussTwinError::MarlError(_) => ErrorCategory::AiMl,
-            
+
             GaussTwinError::ResourceExhausted(_)
             | GaussTwinError::Timeout(_)
             | GaussTwinError::OutOfMemory
             | GaussTwinError::ThreadPoolError(_) => ErrorCategory::Resource,
-            
+
             GaussTwinError::ValidationFailed(_)
             | GaussTwinError::ConstraintViolation(_)
             | GaussTwinError::InvariantViolation(_) => ErrorCategory::Validation,
-            
+
             GaussTwinError::IoError(_)
             | GaussTwinError::FileNotFound(_)
             | GaussTwinError::PermissionDenied(_) => ErrorCategory::Io,
-            
+
             GaussTwinError::ConfigError(_)
             | GaussTwinError::MissingParameter(_)
             | GaussTwinError::InvalidParameter(_) => ErrorCategory::Configuration,
-            
-            GaussTwinError::ServiceUnavailable(_)
-            | GaussTwinError::ExternalServiceError(_) => ErrorCategory::External,
-            
+
+            GaussTwinError::ServiceUnavailable(_) | GaussTwinError::ExternalServiceError(_) => {
+                ErrorCategory::External
+            }
+
             GaussTwinError::Internal(_)
             | GaussTwinError::NotImplemented(_)
             | GaussTwinError::NotSupported(_)
@@ -237,7 +238,7 @@ impl GaussTwinError {
             GaussTwinError::CapacityExceeded(_) => ErrorCategory::Resource,
         }
     }
-    
+
     /// Get error severity level
     pub fn severity(&self) -> ErrorSeverity {
         match self {
@@ -245,24 +246,24 @@ impl GaussTwinError {
             GaussTwinError::OutOfMemory
             | GaussTwinError::InvariantViolation(_)
             | GaussTwinError::Internal(_) => ErrorSeverity::Critical,
-            
+
             // High severity errors that prevent normal operation
             GaussTwinError::ModelNotInitialized
             | GaussTwinError::DatabaseError(_)
             | GaussTwinError::AuthenticationFailed(_)
             | GaussTwinError::PermissionDenied(_) => ErrorSeverity::High,
-            
+
             // Medium severity errors that affect functionality
             GaussTwinError::AgentNotFound(_)
             | GaussTwinError::ValidationFailed(_)
             | GaussTwinError::NetworkError(_)
             | GaussTwinError::ServiceUnavailable(_) => ErrorSeverity::Medium,
-            
+
             // Low severity errors that are expected or easily recoverable
             GaussTwinError::Timeout(_)
             | GaussTwinError::NotSupported(_)
             | GaussTwinError::InvalidParameter(_) => ErrorSeverity::Low,
-            
+
             // Default to medium for other errors
             _ => ErrorSeverity::Medium,
         }
@@ -318,7 +319,9 @@ impl From<std::io::Error> for GaussTwinError {
     fn from(err: std::io::Error) -> Self {
         match err.kind() {
             std::io::ErrorKind::NotFound => GaussTwinError::FileNotFound(err.to_string()),
-            std::io::ErrorKind::PermissionDenied => GaussTwinError::PermissionDenied(err.to_string()),
+            std::io::ErrorKind::PermissionDenied => {
+                GaussTwinError::PermissionDenied(err.to_string())
+            }
             std::io::ErrorKind::TimedOut => GaussTwinError::Timeout(err.to_string()),
             _ => GaussTwinError::IoError(err.to_string()),
         }
@@ -383,9 +386,9 @@ mod tests {
     fn test_error_conversion() {
         let io_error = std::io::Error::new(std::io::ErrorKind::NotFound, "File not found");
         let gauss_error = GaussTwinError::from(io_error);
-        
+
         match gauss_error {
-            GaussTwinError::FileNotFound(_) => {},
+            GaussTwinError::FileNotFound(_) => {}
             _ => panic!("Expected FileNotFound error"),
         }
     }
@@ -396,4 +399,4 @@ mod tests {
         assert!(timeout_error.is_recoverable());
         assert_eq!(timeout_error.severity(), ErrorSeverity::Low);
     }
-} 
+}

@@ -3,11 +3,11 @@
 //! High-performance object pooling for agent instances to minimize allocations
 //! and improve cache locality. Implements lock-free operations where possible.
 
-use std::collections::VecDeque;
-use std::sync::atomic::{AtomicUsize, AtomicU64, Ordering};
-use std::sync::Arc;
-use parking_lot::RwLock;
 use crossbeam_queue::ArrayQueue;
+use parking_lot::RwLock;
+use std::collections::VecDeque;
+use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
+use std::sync::Arc;
 
 use crate::agent::{Agent, AgentId, AgentState};
 use crate::error::{GaussTwinError, Result};
@@ -43,7 +43,7 @@ impl PoolStats {
             self.cache_hits as f64 / total as f64
         }
     }
-    
+
     /// Calculate reuse rate
     pub fn reuse_rate(&self) -> f64 {
         if self.total_acquired == 0 {
@@ -85,7 +85,7 @@ impl Default for PoolConfig {
 }
 
 /// Lock-free object pool using crossbeam's ArrayQueue
-/// 
+///
 /// This implementation provides:
 /// - O(1) acquire and release operations
 /// - Lock-free concurrent access
@@ -143,7 +143,7 @@ impl<T: Send> ObjectPool<T> {
         } else {
             config.initial_capacity.max(1024)
         };
-        
+
         let pool = Self {
             storage: ArrayQueue::new(capacity),
             factory: Box::new(factory),
@@ -151,7 +151,7 @@ impl<T: Send> ObjectPool<T> {
             config,
             stats: Arc::new(PoolStatsAtomic::default()),
         };
-        
+
         // Pre-warm the pool if configured
         if pool.config.pre_warm {
             for _ in 0..pool.config.initial_capacity {
@@ -162,17 +162,17 @@ impl<T: Send> ObjectPool<T> {
             }
             pool.update_peak_size();
         }
-        
+
         pool
     }
-    
+
     /// Acquire an object from the pool
-    /// 
+    ///
     /// Returns an existing object if available, otherwise creates a new one.
     /// This operation is lock-free.
     pub fn acquire(&self) -> T {
         self.stats.total_acquired.fetch_add(1, Ordering::Relaxed);
-        
+
         match self.storage.pop() {
             Some(mut obj) => {
                 self.stats.cache_hits.fetch_add(1, Ordering::Relaxed);
@@ -187,14 +187,14 @@ impl<T: Send> ObjectPool<T> {
             }
         }
     }
-    
+
     /// Release an object back to the pool
-    /// 
+    ///
     /// Returns true if the object was successfully added to the pool,
     /// false if the pool is at capacity (object will be dropped).
     pub fn release(&self, obj: T) -> bool {
         self.stats.total_returned.fetch_add(1, Ordering::Relaxed);
-        
+
         match self.storage.push(obj) {
             Ok(()) => {
                 self.stats.current_size.fetch_add(1, Ordering::Relaxed);
@@ -208,12 +208,12 @@ impl<T: Send> ObjectPool<T> {
             }
         }
     }
-    
+
     /// Get the current number of available objects
     pub fn available(&self) -> usize {
         self.stats.current_size.load(Ordering::Relaxed)
     }
-    
+
     /// Get pool statistics
     pub fn stats(&self) -> PoolStats {
         PoolStats {
@@ -227,7 +227,7 @@ impl<T: Send> ObjectPool<T> {
             cache_misses: self.stats.cache_misses.load(Ordering::Relaxed),
         }
     }
-    
+
     /// Clear the pool, destroying all objects
     pub fn clear(&self) {
         while let Some(_) = self.storage.pop() {
@@ -235,11 +235,11 @@ impl<T: Send> ObjectPool<T> {
             self.stats.current_size.fetch_sub(1, Ordering::Relaxed);
         }
     }
-    
+
     fn update_peak_size(&self) {
         let current = self.stats.current_size.load(Ordering::Relaxed);
         let mut peak = self.stats.peak_size.load(Ordering::Relaxed);
-        
+
         while current > peak {
             match self.stats.peak_size.compare_exchange_weak(
                 peak,
@@ -268,7 +268,7 @@ impl<'a, T: Send> PoolGuard<'a, T> {
             obj: Some(pool.acquire()),
         }
     }
-    
+
     /// Take ownership of the object (prevents auto-return)
     pub fn take(mut self) -> T {
         self.obj.take().expect("Object already taken")
@@ -277,7 +277,7 @@ impl<'a, T: Send> PoolGuard<'a, T> {
 
 impl<'a, T: Send> std::ops::Deref for PoolGuard<'a, T> {
     type Target = T;
-    
+
     fn deref(&self) -> &Self::Target {
         self.obj.as_ref().expect("Object already taken")
     }
@@ -335,14 +335,14 @@ impl<S: AgentState + Default> AgentPool<S> {
             },
             config,
         );
-        
+
         Self {
             inner,
             active_agents: RwLock::new(std::collections::HashMap::new()),
             generation: AtomicU64::new(0),
         }
     }
-    
+
     /// Acquire an agent from the pool
     pub fn acquire_agent(&self) -> AgentContainer<S> {
         let mut container = self.inner.acquire();
@@ -351,13 +351,13 @@ impl<S: AgentState + Default> AgentPool<S> {
         container.id = AgentId::new(); // Generate new ID
         container
     }
-    
+
     /// Release an agent back to the pool
     pub fn release_agent(&self, mut container: AgentContainer<S>) {
         container.active = false;
         self.inner.release(container);
     }
-    
+
     /// Get pool statistics
     pub fn stats(&self) -> PoolStats {
         self.inner.stats()
@@ -365,7 +365,7 @@ impl<S: AgentState + Default> AgentPool<S> {
 }
 
 /// Memory arena for bulk agent allocations
-/// 
+///
 /// Provides contiguous memory allocation for agents to improve
 /// cache performance during iteration.
 pub struct AgentArena<S: AgentState> {
@@ -384,9 +384,9 @@ impl<S: AgentState + Default + Clone> AgentArena<S> {
     pub fn new(capacity: usize) -> Self {
         let mut storage = Vec::with_capacity(capacity);
         storage.resize_with(capacity, || None);
-        
+
         let free_slots: VecDeque<usize> = (0..capacity).collect();
-        
+
         Self {
             storage,
             free_slots,
@@ -394,7 +394,7 @@ impl<S: AgentState + Default + Clone> AgentArena<S> {
             capacity,
         }
     }
-    
+
     /// Allocate an agent in the arena
     pub fn allocate(&mut self) -> Result<usize> {
         match self.free_slots.pop_front() {
@@ -408,18 +408,19 @@ impl<S: AgentState + Default + Clone> AgentArena<S> {
                 self.active_count += 1;
                 Ok(slot)
             }
-            None => Err(GaussTwinError::CapacityExceeded(
-                format!("Arena capacity {} exceeded", self.capacity)
-            ))
+            None => Err(GaussTwinError::CapacityExceeded(format!(
+                "Arena capacity {} exceeded",
+                self.capacity
+            ))),
         }
     }
-    
+
     /// Deallocate an agent from the arena
     pub fn deallocate(&mut self, slot: usize) -> Result<()> {
         if slot >= self.capacity {
             return Err(GaussTwinError::IndexOutOfBounds(slot, self.capacity));
         }
-        
+
         if self.storage[slot].is_some() {
             self.storage[slot] = None;
             // Reuse the most-recently-freed slot first (LIFO/stack discipline).
@@ -428,10 +429,10 @@ impl<S: AgentState + Default + Clone> AgentArena<S> {
             self.free_slots.push_front(slot);
             self.active_count -= 1;
         }
-        
+
         Ok(())
     }
-    
+
     /// Get reference to agent at slot
     pub fn get(&self, slot: usize) -> Option<&AgentContainer<S>> {
         if slot < self.capacity {
@@ -440,7 +441,7 @@ impl<S: AgentState + Default + Clone> AgentArena<S> {
             None
         }
     }
-    
+
     /// Get mutable reference to agent at slot
     pub fn get_mut(&mut self, slot: usize) -> Option<&mut AgentContainer<S>> {
         if slot < self.capacity {
@@ -449,36 +450,38 @@ impl<S: AgentState + Default + Clone> AgentArena<S> {
             None
         }
     }
-    
+
     /// Iterate over all active agents
     pub fn iter(&self) -> impl Iterator<Item = (usize, &AgentContainer<S>)> {
-        self.storage.iter().enumerate().filter_map(|(i, opt)| {
-            opt.as_ref().map(|container| (i, container))
-        })
+        self.storage
+            .iter()
+            .enumerate()
+            .filter_map(|(i, opt)| opt.as_ref().map(|container| (i, container)))
     }
-    
+
     /// Iterate mutably over all active agents
     pub fn iter_mut(&mut self) -> impl Iterator<Item = (usize, &mut AgentContainer<S>)> {
-        self.storage.iter_mut().enumerate().filter_map(|(i, opt)| {
-            opt.as_mut().map(|container| (i, container))
-        })
+        self.storage
+            .iter_mut()
+            .enumerate()
+            .filter_map(|(i, opt)| opt.as_mut().map(|container| (i, container)))
     }
-    
+
     /// Get active agent count
     pub fn active_count(&self) -> usize {
         self.active_count
     }
-    
+
     /// Get arena capacity
     pub fn capacity(&self) -> usize {
         self.capacity
     }
-    
+
     /// Check if arena is full
     pub fn is_full(&self) -> bool {
         self.active_count >= self.capacity
     }
-    
+
     /// Clear all agents from the arena
     pub fn clear(&mut self) {
         for i in 0..self.capacity {
@@ -495,7 +498,7 @@ impl<S: AgentState + Default + Clone> AgentArena<S> {
 mod tests {
     use super::*;
     use crate::agent::DefaultAgentState;
-    
+
     #[test]
     fn test_object_pool_basic() {
         let pool: ObjectPool<Vec<u8>> = ObjectPool::new(
@@ -503,24 +506,24 @@ mod tests {
             |v| v.clear(),
             PoolConfig::default(),
         );
-        
+
         // Acquire an object
         let mut v1 = pool.acquire();
         v1.push(1);
         v1.push(2);
-        
+
         // Release it
         pool.release(v1);
-        
+
         // Acquire again - should get the same (reset) object
         let v2 = pool.acquire();
         assert!(v2.is_empty()); // Reset function cleared it
-        
+
         let stats = pool.stats();
         assert_eq!(stats.cache_hits, 1); // Second acquire hit the cache
         assert_eq!(stats.cache_misses, 1); // First acquire was a miss
     }
-    
+
     #[test]
     fn test_pool_guard() {
         let pool: ObjectPool<Vec<u8>> = ObjectPool::new(
@@ -528,73 +531,73 @@ mod tests {
             |v| v.clear(),
             PoolConfig::default(),
         );
-        
+
         {
             let mut guard = PoolGuard::new(&pool);
             guard.push(1);
             guard.push(2);
             assert_eq!(guard.len(), 2);
         } // Guard drops here, returning to pool
-        
+
         let stats = pool.stats();
         assert_eq!(stats.total_returned, 1);
     }
-    
+
     #[test]
     fn test_agent_pool() {
         let pool: AgentPool<DefaultAgentState> = AgentPool::new(PoolConfig::default());
-        
+
         let agent1 = pool.acquire_agent();
         let id1 = agent1.id;
         assert!(agent1.active);
-        
+
         pool.release_agent(agent1);
-        
+
         let agent2 = pool.acquire_agent();
         assert!(agent2.active);
         assert_ne!(agent2.id, id1); // New ID assigned
-        
+
         let stats = pool.stats();
         assert_eq!(stats.total_acquired, 2);
     }
-    
+
     #[test]
     fn test_agent_arena() {
         let mut arena: AgentArena<DefaultAgentState> = AgentArena::new(100);
-        
+
         // Allocate some agents
         let slot1 = arena.allocate().unwrap();
         let slot2 = arena.allocate().unwrap();
         let slot3 = arena.allocate().unwrap();
-        
+
         assert_eq!(arena.active_count(), 3);
-        
+
         // Deallocate one
         arena.deallocate(slot2).unwrap();
         assert_eq!(arena.active_count(), 2);
-        
+
         // Allocate another - should reuse slot
         let slot4 = arena.allocate().unwrap();
         assert_eq!(slot4, slot2); // Reused slot
         assert_eq!(arena.active_count(), 3);
-        
+
         // Iterate
         let count = arena.iter().count();
         assert_eq!(count, 3);
     }
-    
+
     #[test]
     fn test_arena_capacity() {
         let mut arena: AgentArena<DefaultAgentState> = AgentArena::new(2);
-        
+
         arena.allocate().unwrap();
         arena.allocate().unwrap();
-        
+
         // Should fail - capacity exceeded
         assert!(arena.allocate().is_err());
         assert!(arena.is_full());
     }
-    
+
     #[test]
     fn test_pool_stats() {
         let pool: ObjectPool<Vec<u8>> = ObjectPool::new(
@@ -602,13 +605,13 @@ mod tests {
             |v| v.clear(),
             PoolConfig::default(),
         );
-        
+
         // Create some activity
         for _ in 0..10 {
             let v = pool.acquire();
             pool.release(v);
         }
-        
+
         let stats = pool.stats();
         assert_eq!(stats.total_acquired, 10);
         assert_eq!(stats.total_returned, 10);

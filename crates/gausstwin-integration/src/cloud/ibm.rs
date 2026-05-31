@@ -1,4 +1,4 @@
-use crate::{Connector, Config, Result, common};
+use crate::{common, Config, Connector, Result};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
@@ -16,7 +16,7 @@ pub struct IBMConnector {
 
 impl IBMConnector {
     pub fn new(config: IBMConfig) -> Self {
-        Self { 
+        Self {
             config,
             metrics: common::Metrics::default(),
         }
@@ -43,4 +43,4 @@ impl Connector for IBMConnector {
     fn metrics(&self) -> &common::Metrics {
         &self.metrics
     }
-} 
+}

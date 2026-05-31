@@ -1,10 +1,6 @@
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use gausstwin_core::space::{
-    grid::GridSpace,
-    continuous::ContinuousSpace,
-    graph::GraphSpace,
-    Position,
-    Space,
+    continuous::ContinuousSpace, graph::GraphSpace, grid::GridSpace, Position, Space,
 };
 use rand::Rng;
 
@@ -34,10 +30,7 @@ fn bench_grid_space(c: &mut Criterion) {
 
     group.bench_function("add_agent", |b| {
         b.iter(|| {
-            let pos = Position::Grid(vec![
-                rng.gen_range(0..100),
-                rng.gen_range(0..100),
-            ]);
+            let pos = Position::Grid(vec![rng.gen_range(0..100), rng.gen_range(0..100)]);
             space.add_agent(black_box(rng.gen()), black_box(pos));
         });
     });
@@ -59,10 +52,8 @@ fn bench_continuous_space(c: &mut Criterion) {
 
     group.bench_function("add_agent", |b| {
         b.iter(|| {
-            let pos = Position::Continuous(vec![
-                rng.gen_range(0.0..100.0),
-                rng.gen_range(0.0..100.0),
-            ]);
+            let pos =
+                Position::Continuous(vec![rng.gen_range(0.0..100.0), rng.gen_range(0.0..100.0)]);
             space.add_agent(black_box(rng.gen()), black_box(pos));
         });
     });
@@ -105,4 +96,4 @@ criterion_group!(
     bench_continuous_space,
     bench_graph_space
 );
-criterion_main!(benches); 
+criterion_main!(benches);

@@ -350,7 +350,9 @@ impl PostgresConnector {
             vec![]
         };
 
-        self.internal_metrics.queries.fetch_add(1, Ordering::Relaxed);
+        self.internal_metrics
+            .queries
+            .fetch_add(1, Ordering::Relaxed);
         self.internal_metrics
             .rows_returned
             .fetch_add(rows.len() as u64, Ordering::Relaxed);
@@ -367,7 +369,7 @@ impl PostgresConnector {
         params: &QueryParams,
     ) -> Result<Vec<T>> {
         let rows = self.query(sql, params).await?;
-        
+
         // Convert rows to type
         let results: Vec<T> = rows
             .into_iter()
@@ -393,7 +395,7 @@ impl PostgresConnector {
         params: &QueryParams,
     ) -> Result<Option<T>> {
         let row = self.query_one(sql, params).await?;
-        
+
         if let Some(row) = row {
             if let Some((_, value)) = row.columns.into_iter().next() {
                 let json = serde_json::to_value(&value)?;
@@ -487,7 +489,7 @@ impl PostgresConnector {
         }
 
         let transaction = Transaction::new(isolation_level);
-        
+
         {
             let mut transactions = self.state.active_transactions.write().await;
             transactions.insert(transaction.id.clone(), isolation_level);
@@ -497,7 +499,10 @@ impl PostgresConnector {
             .transactions
             .fetch_add(1, Ordering::Relaxed);
 
-        info!("Started transaction {} with {:?}", transaction.id, isolation_level);
+        info!(
+            "Started transaction {} with {:?}",
+            transaction.id, isolation_level
+        );
         Ok(transaction)
     }
 
@@ -536,10 +541,14 @@ impl PostgresConnector {
     /// Execute within a transaction
     pub async fn with_transaction<F, T>(&self, isolation_level: IsolationLevel, f: F) -> Result<T>
     where
-        F: FnOnce(&Self) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<T>> + Send + '_>> + Send,
+        F: FnOnce(
+                &Self,
+            )
+                -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<T>> + Send + '_>>
+            + Send,
     {
         let mut tx = self.begin(isolation_level).await?;
-        
+
         match f(self).await {
             Ok(result) => {
                 self.commit(&mut tx).await?;
@@ -574,7 +583,7 @@ impl PostgresConnector {
     pub async fn create_table(&self, name: &str, schema: &str) -> Result<()> {
         let sql = format!("CREATE TABLE {} ({})", name, schema);
         self.execute(&sql, &vec![]).await?;
-        
+
         {
             let mut tables = self.state.tables.write().await;
             tables.insert(name.to_string(), Vec::new());
@@ -591,7 +600,7 @@ impl PostgresConnector {
         } else {
             format!("DROP TABLE {}", name)
         };
-        
+
         self.execute(&sql, &vec![]).await?;
 
         {
@@ -672,7 +681,10 @@ impl Connector for PostgresConnector {
                 database,
                 username,
                 ..
-            } => format!("postgresql://{}:***@{}:{}/{}", username, host, port, database),
+            } => format!(
+                "postgresql://{}:***@{}:{}/{}",
+                username, host, port, database
+            ),
         };
 
         info!("Connecting to PostgreSQL at {}", connection_str);
@@ -798,10 +810,10 @@ mod tests {
         connector.connect().await.unwrap();
 
         let result = connector
-            .execute("INSERT INTO test (id, name) VALUES ($1, $2)", &vec![
-                Value::Int32(1),
-                Value::Text("test".to_string()),
-            ])
+            .execute(
+                "INSERT INTO test (id, name) VALUES ($1, $2)",
+                &vec![Value::Int32(1), Value::Text("test".to_string())],
+            )
             .await
             .unwrap();
 
@@ -833,7 +845,10 @@ mod tests {
         let mut connector = PostgresConnector::new(config).await.unwrap();
         connector.connect().await.unwrap();
 
-        let mut tx = connector.begin(IsolationLevel::ReadCommitted).await.unwrap();
+        let mut tx = connector
+            .begin(IsolationLevel::ReadCommitted)
+            .await
+            .unwrap();
         assert!(!tx.completed);
 
         connector.commit(&mut tx).await.unwrap();

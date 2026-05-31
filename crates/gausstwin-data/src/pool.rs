@@ -1,9 +1,9 @@
-use std::sync::Arc;
-use std::time::Duration;
 use async_trait::async_trait;
-use tokio::sync::{Semaphore, RwLock};
 use metrics::{counter, gauge};
 use std::ops::{Deref, DerefMut};
+use std::sync::Arc;
+use std::time::Duration;
+use tokio::sync::{RwLock, Semaphore};
 
 use crate::error::{DataError, DataResult, PoolError};
 use crate::types::PoolConfig;
@@ -12,11 +12,13 @@ use crate::types::PoolConfig;
 #[async_trait]
 pub trait PoolableConnection: Send + Sync + 'static {
     /// Connect to the connection
-    async fn connect(url: &str) -> DataResult<Self> where Self: Sized;
-    
+    async fn connect(url: &str) -> DataResult<Self>
+    where
+        Self: Sized;
+
     /// Close the connection
     async fn close(&mut self) -> DataResult<()>;
-    
+
     /// Check if the connection is valid
     fn is_valid(&self) -> bool;
 
@@ -70,13 +72,13 @@ pub struct PoolStats {
 pub struct ConnectionPool<T: PoolableConnection> {
     /// Available connections
     connections: Arc<RwLock<Vec<T>>>,
-    
+
     /// Pool configuration
     config: PoolConfig,
-    
+
     /// Semaphore for connection count limiting
     semaphore: Arc<Semaphore>,
-    
+
     /// Pool statistics
     stats: Arc<RwLock<PoolStats>>,
 
@@ -104,21 +106,22 @@ impl<T: PoolableConnection> ConnectionPool<T> {
             url,
         }
     }
-    
+
     /// Get a connection from the pool
     pub async fn acquire(&self) -> DataResult<PooledConnection<'_, T>> {
-        let permit = self.semaphore
+        let permit = self
+            .semaphore
             .acquire()
             .await
             .map_err(|_| PoolError::NoAvailableConnections)?;
-        
+
         let mut connections = self.connections.write().await;
         if let Some(conn) = connections.pop() {
             let mut stats = self.stats.write().await;
             stats.acquired_current += 1;
             gauge!("pool.connections.active", stats.acquired_current as f64);
             gauge!("pool.connections.idle", stats.idle_current as f64);
-            
+
             Ok(PooledConnection {
                 pool: self,
                 connection: Some(conn),
@@ -130,7 +133,7 @@ impl<T: PoolableConnection> ConnectionPool<T> {
             stats.acquired_current += 1;
             gauge!("pool.connections.active", stats.acquired_current as f64);
             gauge!("pool.connections.idle", stats.idle_current as f64);
-            
+
             Ok(PooledConnection {
                 pool: self,
                 connection: Some(conn),
@@ -138,32 +141,32 @@ impl<T: PoolableConnection> ConnectionPool<T> {
             })
         }
     }
-    
+
     /// Return a connection to the pool
     pub async fn release(&self, mut conn: T) -> DataResult<()> {
         if !conn.is_valid() {
             conn.reset().await?;
         }
         let mut connections = self.connections.write().await;
-        
+
         // Check if we should close this connection
         if connections.len() >= self.config.max_size {
             return Ok(());
         }
-        
+
         connections.push(conn);
         let mut stats = self.stats.write().await;
         stats.returned_total += 1;
         stats.acquired_current -= 1;
         stats.idle_current += 1;
-        
+
         counter!("pool.connections.returned.total", 1);
         gauge!("pool.connections.active", stats.acquired_current as f64);
         gauge!("pool.connections.idle", stats.idle_current as f64);
-        
+
         Ok(())
     }
-    
+
     /// Get current pool statistics
     pub async fn stats(&self) -> PoolStats {
         self.stats.read().await.clone()
@@ -184,7 +187,11 @@ impl<T: PoolableConnection> Clone for ConnectionPool<T> {
 
 impl<'a, T: PoolableConnection> PooledConnection<'a, T> {
     pub fn get_mut(&mut self) -> DataResult<&mut T> {
-        self.connection.as_mut().ok_or_else(|| DataError::Pool(PoolError::InvalidConnection("Connection is not available".to_string())))
+        self.connection.as_mut().ok_or_else(|| {
+            DataError::Pool(PoolError::InvalidConnection(
+                "Connection is not available".to_string(),
+            ))
+        })
     }
 }
 
@@ -206,25 +213,28 @@ mod tests {
     use super::*;
     use std::sync::atomic::{AtomicU64, Ordering};
     use tokio::time::sleep;
-    
+
     struct MockConnection {
         id: u64,
         is_healthy: bool,
     }
-    
+
     #[async_trait]
     impl PoolableConnection for MockConnection {
-        async fn connect(url: &str) -> DataResult<Self> where Self: Sized {
+        async fn connect(url: &str) -> DataResult<Self>
+        where
+            Self: Sized,
+        {
             Ok(MockConnection {
                 id: url.parse::<u64>()?,
                 is_healthy: true,
             })
         }
-        
+
         async fn close(&mut self) -> DataResult<()> {
             Ok(())
         }
-        
+
         fn is_valid(&self) -> bool {
             self.is_healthy
         }
@@ -237,35 +247,31 @@ mod tests {
             Ok(())
         }
     }
-    
+
     #[tokio::test]
     async fn test_pool_basic_operations() {
         let counter = Arc::new(AtomicU64::new(0));
         let counter_clone = Arc::clone(&counter);
-        
-        let pool = ConnectionPool::new(
-            vec![],
-            5,
-            String::new(),
-        );
-        
+
+        let pool = ConnectionPool::new(vec![], 5, String::new());
+
         // Initialize pool
         pool.initialize().await.unwrap();
         assert_eq!(pool.stats().idle_current, 0);
-        
+
         // Acquire connections
         let conn1 = pool.acquire().await.unwrap();
         let conn2 = pool.acquire().await.unwrap();
         assert_eq!(pool.stats().acquired_current, 2);
-        
+
         // Return connections
         drop(conn1);
         drop(conn2);
-        
+
         // Allow async operations to complete
         sleep(Duration::from_millis(100)).await;
-        
+
         assert_eq!(pool.stats().acquired_current, 0);
         assert_eq!(pool.stats().idle_current, 5);
     }
-} 
+}

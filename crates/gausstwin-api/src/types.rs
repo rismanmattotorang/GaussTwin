@@ -87,4 +87,4 @@ pub struct ServiceStatus {
     pub status: String,
     pub message: Option<String>,
     pub last_check: chrono::DateTime<chrono::Utc>,
-} 
+}

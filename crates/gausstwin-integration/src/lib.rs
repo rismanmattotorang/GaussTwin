@@ -1,5 +1,5 @@
 //! GaussTwin Integration Layer
-//! 
+//!
 //! Provides comprehensive integration capabilities for GaussTwin Enterprise platform.
 
 use async_trait::async_trait;
@@ -7,12 +7,12 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tracing::{debug, error, info, warn};
 
-pub mod common;
-pub mod io;
-pub mod connectors;
-pub mod cloud;
 pub mod blockchain;
+pub mod cloud;
+pub mod common;
+pub mod connectors;
 pub mod industrial;
+pub mod io;
 
 // Re-exports
 pub use common::{Error, Result};
@@ -22,13 +22,13 @@ pub use common::{Error, Result};
 pub trait Connector: Send + Sync {
     /// Initialize the connector
     async fn connect(&mut self) -> Result<()>;
-    
+
     /// Disconnect and cleanup
     async fn disconnect(&mut self) -> Result<()>;
-    
+
     /// Check connection status
     async fn is_connected(&self) -> bool;
-    
+
     /// Get connector metrics
     fn metrics(&self) -> &common::Metrics;
 }
@@ -108,11 +108,24 @@ pub struct RetryPolicy {
 /// Integration events
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Event {
-    Connected { connector: String },
-    Disconnected { connector: String },
-    DataReceived { connector: String, format: DataFormat },
-    DataSent { connector: String, format: DataFormat },
-    Error { connector: String, error: String },
+    Connected {
+        connector: String,
+    },
+    Disconnected {
+        connector: String,
+    },
+    DataReceived {
+        connector: String,
+        format: DataFormat,
+    },
+    DataSent {
+        connector: String,
+        format: DataFormat,
+    },
+    Error {
+        connector: String,
+        error: String,
+    },
 }
 
 /// Integration status
@@ -192,31 +205,57 @@ impl IntegrationBuilder {
         // Factory pattern to create appropriate connector
         match self.config.connector_type.as_str() {
             // IoT & Edge
-            "mqtt" => Ok(Box::new(connectors::mqtt::MqttConnector::new(self.config).await?)),
-            "opcua" => Ok(Box::new(connectors::opcua::OpcUaConnector::new(self.config).await?)),
-            "modbus" => Ok(Box::new(connectors::modbus::ModbusConnector::new(self.config).await?)),
-            
+            "mqtt" => Ok(Box::new(
+                connectors::mqtt::MqttConnector::new(self.config).await?,
+            )),
+            "opcua" => Ok(Box::new(
+                connectors::opcua::OpcUaConnector::new(self.config).await?,
+            )),
+            "modbus" => Ok(Box::new(
+                connectors::modbus::ModbusConnector::new(self.config).await?,
+            )),
+
             // Cloud
-            "aws" => Ok(Box::new(cloud::aws::AWSConnector::new(cloud::aws::AWSConfig::from(self.config)))),
-            "azure" => Ok(Box::new(cloud::azure::AzureConnector::new(cloud::azure::AzureConfig::from(self.config)))),
-            "gcp" => Ok(Box::new(cloud::gcp::GCPConnector::new(cloud::gcp::GCPConfig::from(self.config)))),
-            
+            "aws" => Ok(Box::new(cloud::aws::AWSConnector::new(
+                cloud::aws::AWSConfig::from(self.config),
+            ))),
+            "azure" => Ok(Box::new(cloud::azure::AzureConnector::new(
+                cloud::azure::AzureConfig::from(self.config),
+            ))),
+            "gcp" => Ok(Box::new(cloud::gcp::GCPConnector::new(
+                cloud::gcp::GCPConfig::from(self.config),
+            ))),
+
             // Blockchain
-            "ethereum" => Ok(Box::new(blockchain::ethereum::EthereumConnector::new(blockchain::ethereum::EthereumConfig::from(self.config)))),
+            "ethereum" => Ok(Box::new(blockchain::ethereum::EthereumConnector::new(
+                blockchain::ethereum::EthereumConfig::from(self.config),
+            ))),
             // "solana" => Ok(Box::new(blockchain::solana::SolanaConnector::new(self.config).await?)),
-            
+
             // Message Brokers
-            "kafka" => Ok(Box::new(connectors::kafka::KafkaConnector::new(self.config).await?)),
-            "rabbitmq" => Ok(Box::new(connectors::rabbitmq::RabbitMqConnector::new(self.config).await?)),
-            
+            "kafka" => Ok(Box::new(
+                connectors::kafka::KafkaConnector::new(self.config).await?,
+            )),
+            "rabbitmq" => Ok(Box::new(
+                connectors::rabbitmq::RabbitMqConnector::new(self.config).await?,
+            )),
+
             // Databases
-            "mongodb" => Ok(Box::new(connectors::mongodb::MongoDbConnector::new(self.config).await?)),
-            "postgresql" => Ok(Box::new(connectors::postgresql::PostgresConnector::new(self.config).await?)),
-            
+            "mongodb" => Ok(Box::new(
+                connectors::mongodb::MongoDbConnector::new(self.config).await?,
+            )),
+            "postgresql" => Ok(Box::new(
+                connectors::postgresql::PostgresConnector::new(self.config).await?,
+            )),
+
             // Industrial
-            "s7" => Ok(Box::new(industrial::s7::S7Connector::new(self.config).await?)),
-            "bacnet" => Ok(Box::new(industrial::bacnet::BacnetConnector::new(self.config).await?)),
-            
+            "s7" => Ok(Box::new(
+                industrial::s7::S7Connector::new(self.config).await?,
+            )),
+            "bacnet" => Ok(Box::new(
+                industrial::bacnet::BacnetConnector::new(self.config).await?,
+            )),
+
             _ => Err(Error::UnsupportedConnector(self.config.connector_type)),
         }
     }
@@ -239,8 +278,8 @@ mod tests {
                     ..Default::default()
                 },
             });
-        
+
         assert_eq!(builder.config.name, "test");
         assert_eq!(builder.config.connector_type, "mqtt");
     }
-} 
+}

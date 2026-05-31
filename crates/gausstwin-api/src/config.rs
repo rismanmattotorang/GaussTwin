@@ -234,7 +234,7 @@ impl Default for CacheConfig {
     fn default() -> Self {
         Self {
             skytable: SkyTableConfig::default(),
-            default_ttl: 3600, // 1 hour
+            default_ttl: 3600,           // 1 hour
             max_size: 1024 * 1024 * 100, // 100MB
             enable_compression: false,
         }
@@ -420,7 +420,12 @@ impl Default for CorsConfig {
     fn default() -> Self {
         Self {
             allowed_origins: vec!["*".to_string()],
-            allowed_methods: vec!["GET".to_string(), "POST".to_string(), "PUT".to_string(), "DELETE".to_string()],
+            allowed_methods: vec![
+                "GET".to_string(),
+                "POST".to_string(),
+                "PUT".to_string(),
+                "DELETE".to_string(),
+            ],
             allowed_headers: vec!["*".to_string()],
             allow_credentials: true,
             max_age: 86400, // 24 hours
@@ -468,4 +473,4 @@ impl Default for ServerConfig {
     }
 }
 
-// All Default implementations are now manually defined above 
+// All Default implementations are now manually defined above

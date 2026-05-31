@@ -1,5 +1,5 @@
 //! GaussTwin Visualization System
-//! 
+//!
 //! Provides advanced analytics and visualization capabilities including:
 //! - Real-time dashboards
 //! - Predictive analytics
@@ -7,15 +7,15 @@
 //! - What-if analysis
 //! - Scenario planning
 
+use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use serde::{Serialize, Deserialize};
 
-pub mod dashboard;
-pub mod scenarios;
 mod analytics;
-mod server;
+pub mod dashboard;
 mod error;
+pub mod scenarios;
+mod server;
 
 pub use error::Error;
 pub type Result<T> = std::result::Result<T, Error>;
@@ -81,7 +81,10 @@ impl VisualSystem {
     }
 
     /// Create a new real-time dashboard
-    pub async fn create_dashboard(&self, config: dashboard::DashboardConfig) -> Result<dashboard::DashboardId> {
+    pub async fn create_dashboard(
+        &self,
+        config: dashboard::DashboardConfig,
+    ) -> Result<dashboard::DashboardId> {
         let mut state = self.state.write().await;
         let dashboard = dashboard::Dashboard::new(config);
         let id = dashboard.id();
@@ -96,19 +99,28 @@ impl VisualSystem {
     }
 
     /// Generate prescriptive recommendations
-    pub async fn generate_recommendations(&self, context: analytics::Context) -> Result<Vec<analytics::Recommendation>> {
+    pub async fn generate_recommendations(
+        &self,
+        context: analytics::Context,
+    ) -> Result<Vec<analytics::Recommendation>> {
         let state = self.state.read().await;
         state.analytics.recommend(context).await
     }
 
     /// Create a new what-if scenario
-    pub async fn create_scenario(&self, config: scenarios::ScenarioConfig) -> Result<scenarios::ScenarioId> {
+    pub async fn create_scenario(
+        &self,
+        config: scenarios::ScenarioConfig,
+    ) -> Result<scenarios::ScenarioId> {
         let mut state = self.state.write().await;
         state.scenarios.create_scenario(config).await
     }
 
     /// Run a what-if analysis on a scenario
-    pub async fn analyze_scenario(&self, id: scenarios::ScenarioId) -> Result<scenarios::ScenarioResults> {
+    pub async fn analyze_scenario(
+        &self,
+        id: scenarios::ScenarioId,
+    ) -> Result<scenarios::ScenarioResults> {
         let state = self.state.read().await;
         state.scenarios.analyze_scenario(id).await
     }

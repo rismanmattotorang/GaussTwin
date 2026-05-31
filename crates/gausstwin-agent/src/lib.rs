@@ -1,5 +1,5 @@
 //! GaussTwin Agent Framework
-//! 
+//!
 //! A high-performance, enterprise-grade agent-based modeling framework with features including:
 //! - SIMD-accelerated agent operations
 //! - Advanced spatial indexing
@@ -7,7 +7,7 @@
 //! - Multi-agent reinforcement learning
 //! - Distributed agent simulation
 //! - Real-time visualization
-//! 
+//!
 //! # Features
 //! - Multiple agent architectures (Reactive, BDI, Cognitive)
 //! - Advanced spatial awareness and pathfinding
@@ -35,13 +35,13 @@ use std::{
 use async_trait::async_trait;
 use dashmap::DashMap;
 use ndarray::{Array1, Array2};
-use parking_lot::{RwLock, Mutex};
+use parking_lot::{Mutex, RwLock};
 use serde::{Deserialize, Serialize};
+use serde_json;
 use thiserror::Error;
 use tokio::sync::broadcast;
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
-use serde_json;
 
 /// Agent goal for planning and decision making
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -171,10 +171,10 @@ pub enum ResourceErrorKind {
 pub trait Agent: Send + Sync {
     /// Agent's internal state type
     type State: Clone + Send + Sync + Serialize + for<'de> Deserialize<'de>;
-    
+
     /// Agent's observation type
     type Observation: Clone + Send + Sync;
-    
+
     /// Agent's action type
     type Action: Clone + Send + Sync;
 
@@ -194,7 +194,11 @@ pub trait Agent: Send + Sync {
     async fn decide(&mut self, obs: &Self::Observation) -> Result<Self::Action, AgentError>;
 
     /// Execute decided action
-    async fn act(&mut self, action: &Self::Action, ctx: &mut AgentContext) -> Result<(), AgentError>;
+    async fn act(
+        &mut self,
+        action: &Self::Action,
+        ctx: &mut AgentContext,
+    ) -> Result<(), AgentError>;
 
     /// Handle incoming messages
     async fn handle_message(&mut self, msg: Message) -> Result<(), AgentError>;
@@ -210,16 +214,16 @@ pub trait Agent: Send + Sync {
 pub struct AgentContext {
     /// Current simulation time
     pub time: f64,
-    
+
     /// Spatial environment
     pub space: Arc<dyn Space>,
-    
+
     /// Communication channels
     pub channels: Arc<DashMap<String, broadcast::Sender<Message>>>,
-    
+
     /// Shared resources
     pub resources: Arc<DashMap<String, Box<dyn Any + Send + Sync>>>,
-    
+
     /// Metrics collector
     pub metrics: Arc<MetricsCollector>,
 }
@@ -229,13 +233,13 @@ pub struct AgentContext {
 pub struct AgentMemory {
     /// Short-term memory (recent experiences)
     pub short_term: VecDeque<Experience>,
-    
+
     /// Long-term memory (learned patterns/knowledge)
     pub long_term: HashMap<String, Vec<f32>>,
-    
+
     /// Semantic memory (LLM embeddings)
     pub semantic: Option<Vec<f32>>,
-    
+
     /// Memory capacity limits
     pub capacity: MemoryCapacity,
 }
@@ -245,10 +249,10 @@ pub struct AgentMemory {
 pub struct MemoryCapacity {
     /// Maximum short-term memory size
     pub short_term_size: usize,
-    
+
     /// Maximum long-term memory size
     pub long_term_size: usize,
-    
+
     /// Maximum semantic memory size
     pub semantic_size: Option<usize>,
 }
@@ -258,19 +262,19 @@ pub struct MemoryCapacity {
 pub struct Experience {
     /// State before action
     pub state: Vec<f32>,
-    
+
     /// Action taken
     pub action: Vec<f32>,
-    
+
     /// Reward received
     pub reward: f32,
-    
+
     /// Next state after action
     pub next_state: Vec<f32>,
-    
+
     /// Whether episode ended
     pub done: bool,
-    
+
     /// Additional metadata
     pub metadata: Option<serde_json::Value>,
 }
@@ -280,19 +284,19 @@ pub struct Experience {
 pub struct Message {
     /// Message ID
     pub id: Uuid,
-    
+
     /// Sender agent ID
     pub sender: Uuid,
-    
+
     /// Receiver agent ID
     pub receiver: Option<Uuid>,
-    
+
     /// Message content
     pub content: MessageContent,
-    
+
     /// Message metadata
     pub metadata: Option<serde_json::Value>,
-    
+
     /// Message timestamp
     pub timestamp: f64,
 }
@@ -302,13 +306,13 @@ pub struct Message {
 pub enum MessageContent {
     /// Raw text message
     Text(String),
-    
+
     /// Binary data
     Binary(Vec<u8>),
-    
+
     /// JSON data
     Json(serde_json::Value),
-    
+
     /// Vector data
     Vector(Vec<f32>),
 }
@@ -316,12 +320,24 @@ pub enum MessageContent {
 /// Spatial environment abstraction
 #[async_trait]
 pub trait Space: Send + Sync {
-    async fn add_agent(&mut self, agent: Box<DynAgent>, position: Position) -> Result<(), AgentError>;
+    async fn add_agent(
+        &mut self,
+        agent: Box<DynAgent>,
+        position: Position,
+    ) -> Result<(), AgentError>;
     async fn remove_agent(&mut self, agent_id: Uuid) -> Result<(), AgentError>;
-    async fn move_agent(&mut self, agent_id: Uuid, new_position: Position) -> Result<(), AgentError>;
+    async fn move_agent(
+        &mut self,
+        agent_id: Uuid,
+        new_position: Position,
+    ) -> Result<(), AgentError>;
     async fn get_agent_position(&self, agent_id: Uuid) -> Result<Position, AgentError>;
     async fn get_neighbors(&self, agent_id: Uuid, radius: f64) -> Result<Vec<Uuid>, AgentError>;
-    async fn get_agents_in_radius(&self, position: Position, radius: f64) -> Result<Vec<Uuid>, AgentError>;
+    async fn get_agents_in_radius(
+        &self,
+        position: Position,
+        radius: f64,
+    ) -> Result<Vec<Uuid>, AgentError>;
 }
 
 /// Position in 2D/3D space
@@ -329,7 +345,7 @@ pub trait Space: Send + Sync {
 pub enum Position {
     /// 2D position
     Vec2(f64, f64),
-    
+
     /// 3D position
     Vec3(f64, f64, f64),
 }
@@ -338,7 +354,7 @@ pub enum Position {
 pub struct MetricsCollector {
     /// Agent-specific metrics
     agent_metrics: DashMap<Uuid, AgentMetrics>,
-    
+
     /// Global metrics
     global_metrics: Arc<RwLock<GlobalMetrics>>,
 }
@@ -348,16 +364,16 @@ pub struct MetricsCollector {
 pub struct AgentMetrics {
     /// Number of actions taken
     pub actions: u64,
-    
+
     /// Number of messages sent
     pub messages_sent: u64,
-    
+
     /// Number of messages received
     pub messages_received: u64,
-    
+
     /// Average decision time
     pub avg_decision_time: f64,
-    
+
     /// Memory usage
     pub memory_usage: usize,
 }
@@ -367,22 +383,24 @@ pub struct AgentMetrics {
 pub struct GlobalMetrics {
     /// Total number of agents
     pub total_agents: u64,
-    
+
     /// Total number of actions
     pub total_actions: u64,
-    
+
     /// Total number of messages
     pub total_messages: u64,
-    
+
     /// Average actions per second
     pub actions_per_second: f64,
-    
+
     /// Average messages per second
     pub messages_per_second: f64,
 }
 
 // Trait-object safe alias for heterogeneous agents used across the crate
-pub type DynAgent = dyn Agent<State = serde_json::Value, Observation = serde_json::Value, Action = serde_json::Value> + Send + Sync;
+pub type DynAgent = dyn Agent<State = serde_json::Value, Observation = serde_json::Value, Action = serde_json::Value>
+    + Send
+    + Sync;
 
 impl From<serde_json::Error> for AgentError {
     fn from(err: serde_json::Error) -> Self {

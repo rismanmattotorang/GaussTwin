@@ -31,4 +31,4 @@ fn bench_timeseries(c: &mut Criterion) {
 }
 
 criterion_group!(benches, bench_gnn, bench_timeseries);
-criterion_main!(benches); 
+criterion_main!(benches);

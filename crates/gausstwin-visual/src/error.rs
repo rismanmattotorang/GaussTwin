@@ -22,4 +22,4 @@ pub enum Error {
 
     #[error("Invalid configuration: {0}")]
     Config(String),
-} 
+}

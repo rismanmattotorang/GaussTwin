@@ -276,8 +276,7 @@ impl RabbitMqConnector {
 
         if let Some(username) = &config.auth.credentials.username {
             if let Some(password) = &config.auth.credentials.password {
-                rabbitmq_config.uri =
-                    format!("amqp://{}:{}@localhost:5672", username, password);
+                rabbitmq_config.uri = format!("amqp://{}:{}@localhost:5672", username, password);
             }
         }
 
@@ -303,7 +302,7 @@ impl RabbitMqConnector {
     /// Delete an exchange
     pub async fn exchange_delete(&self, name: &str, if_unused: bool) -> Result<()> {
         let mut exchanges = self.state.exchanges.write().await;
-        
+
         if if_unused {
             let bindings = self.state.bindings.read().await;
             if bindings.iter().any(|b| b.exchange == name) {
@@ -380,12 +379,7 @@ impl RabbitMqConnector {
     }
 
     /// Unbind a queue from an exchange
-    pub async fn queue_unbind(
-        &self,
-        queue: &str,
-        exchange: &str,
-        routing_key: &str,
-    ) -> Result<()> {
+    pub async fn queue_unbind(&self, queue: &str, exchange: &str, routing_key: &str) -> Result<()> {
         let mut bindings = self.state.bindings.write().await;
         bindings.retain(|b| {
             !(b.queue == queue && b.exchange == exchange && b.routing_key == routing_key)
@@ -459,8 +453,14 @@ impl RabbitMqConnector {
         properties.content_type = Some("application/json".to_string());
         properties.delivery_mode = Some(DeliveryMode::Persistent);
 
-        self.publish(exchange, routing_key, &body, properties, PublishOptions::default())
-            .await
+        self.publish(
+            exchange,
+            routing_key,
+            &body,
+            properties,
+            PublishOptions::default(),
+        )
+        .await
     }
 
     /// Start consuming from a queue
@@ -565,11 +565,20 @@ impl RabbitMqConnector {
                 0
             },
             connection_failures: 0,
-            messages_sent: self.internal_metrics.messages_published.load(Ordering::Relaxed),
-            messages_received: self.internal_metrics.messages_consumed.load(Ordering::Relaxed),
+            messages_sent: self
+                .internal_metrics
+                .messages_published
+                .load(Ordering::Relaxed),
+            messages_received: self
+                .internal_metrics
+                .messages_consumed
+                .load(Ordering::Relaxed),
             errors: self.internal_metrics.errors.load(Ordering::Relaxed),
             average_latency_ms: avg_latency,
-            bytes_sent: self.internal_metrics.bytes_published.load(Ordering::Relaxed),
+            bytes_sent: self
+                .internal_metrics
+                .bytes_published
+                .load(Ordering::Relaxed),
             bytes_received: self.internal_metrics.bytes_consumed.load(Ordering::Relaxed),
             uptime_seconds: uptime,
         }

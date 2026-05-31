@@ -1,5 +1,5 @@
 //! Time management and synchronization
-//! 
+//!
 //! Provides robust time management capabilities for co-simulation:
 //! - Logical time management
 //! - Time synchronization
@@ -25,7 +25,7 @@ use super::{CosimError, Result, TimeStatus};
 pub struct SimulationTime {
     /// Integer part (for discrete steps)
     pub steps: u64,
-    
+
     /// Fractional part (for continuous time)
     pub fraction: f64,
 }
@@ -84,8 +84,7 @@ impl Add for SimulationTime {
     type Output = Self;
 
     fn add(self, other: Self) -> Self {
-        let total = (self.steps as f64 + self.fraction) + 
-                   (other.steps as f64 + other.fraction);
+        let total = (self.steps as f64 + self.fraction) + (other.steps as f64 + other.fraction);
         let steps = total.floor() as u64;
         let fraction = total.fract();
         Self::new(steps, fraction)
@@ -96,8 +95,7 @@ impl Sub for SimulationTime {
     type Output = Self;
 
     fn sub(self, other: Self) -> Self {
-        let total = (self.steps as f64 + self.fraction) - 
-                   (other.steps as f64 + other.fraction);
+        let total = (self.steps as f64 + self.fraction) - (other.steps as f64 + other.fraction);
         let steps = total.floor() as u64;
         let fraction = total.fract();
         Self::new(steps, fraction)
@@ -108,7 +106,10 @@ impl Eq for SimulationTime {}
 impl Ord for SimulationTime {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         match self.steps.cmp(&other.steps) {
-            std::cmp::Ordering::Equal => self.fraction.partial_cmp(&other.fraction).unwrap_or(std::cmp::Ordering::Equal),
+            std::cmp::Ordering::Equal => self
+                .fraction
+                .partial_cmp(&other.fraction)
+                .unwrap_or(std::cmp::Ordering::Equal),
             ord => ord,
         }
     }
@@ -119,19 +120,19 @@ impl Ord for SimulationTime {
 pub struct TimeManager {
     /// Current simulation time
     current_time: SimulationTime,
-    
+
     /// Lookahead time
     lookahead: Duration,
-    
+
     /// Time horizon
     horizon: Option<SimulationTime>,
-    
+
     /// Pending time requests
     pending_requests: HashMap<String, SimulationTime>,
-    
+
     /// Event queue
     event_queue: BinaryHeap<TimedEvent>,
-    
+
     /// Time status
     status: TimeStatus,
 }
@@ -169,10 +170,10 @@ impl TimeManager {
         // Validate request
         if let Some(horizon) = self.horizon {
             if requested_time > horizon {
-                return Err(CosimError::TimeSync(
-                    format!("Requested time {} exceeds horizon {}", 
-                            requested_time.steps, horizon.steps)
-                ));
+                return Err(CosimError::TimeSync(format!(
+                    "Requested time {} exceeds horizon {}",
+                    requested_time.steps, horizon.steps
+                )));
             }
         }
 
@@ -191,9 +192,10 @@ impl TimeManager {
             self.status = TimeStatus::Granted;
             Ok(())
         } else {
-            Err(CosimError::TimeSync(
-                format!("No pending time request for federate {}", federate)
-            ))
+            Err(CosimError::TimeSync(format!(
+                "No pending time request for federate {}",
+                federate
+            )))
         }
     }
 
@@ -222,10 +224,10 @@ impl TimeManager {
 pub struct TimedEvent {
     /// Event time
     pub time: SimulationTime,
-    
+
     /// Event priority
     pub priority: i32,
-    
+
     /// Event data
     pub data: Vec<u8>,
 }
@@ -247,7 +249,9 @@ impl PartialOrd for TimedEvent {
 impl Ord for TimedEvent {
     fn cmp(&self, other: &Self) -> Ordering {
         // Higher priority events come first
-        other.priority.cmp(&self.priority)
+        other
+            .priority
+            .cmp(&self.priority)
             .then_with(|| self.time.partial_cmp(&other.time).unwrap())
     }
 }
@@ -260,13 +264,13 @@ mod tests {
     fn test_simulation_time() {
         let t1 = SimulationTime::new(1, 0.5);
         let t2 = SimulationTime::new(2, 0.7);
-        
+
         assert!(t1 < t2);
-        
+
         let sum = t1 + t2;
         assert_eq!(sum.steps, 4);
         assert_eq!(sum.fraction, 0.2);
-        
+
         let diff = t2 - t1;
         assert_eq!(diff.steps, 1);
         assert_eq!(diff.fraction, 0.2);
@@ -275,16 +279,16 @@ mod tests {
     #[test]
     fn test_time_manager() {
         let mut tm = TimeManager::new();
-        
+
         // Test time advance
         tm.request_time("fed1".to_string(), SimulationTime::new(1, 0.0))
             .unwrap();
         assert_eq!(tm.status, TimeStatus::Pending);
-        
+
         tm.grant_time("fed1").unwrap();
         assert_eq!(tm.status, TimeStatus::Granted);
         assert_eq!(tm.current_time(), SimulationTime::new(1, 0.0));
-        
+
         // Test event scheduling
         let event = TimedEvent {
             time: SimulationTime::new(2, 0.0),
@@ -292,8 +296,8 @@ mod tests {
             data: vec![1, 2, 3],
         };
         tm.schedule_event(event.clone());
-        
+
         let next = tm.next_event().unwrap();
         assert_eq!(next.time, event.time);
     }
-} 
+}

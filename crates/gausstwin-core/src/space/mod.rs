@@ -1,13 +1,13 @@
-pub mod grid;
 pub mod continuous;
 pub mod graph;
+pub mod grid;
 pub mod metrics;
 
-use std::fmt::Debug;
-use nalgebra::Vector3;
-use serde::{Serialize, Deserialize};
 use crate::agent::AgentId;
 use crate::error::Result;
+use nalgebra::Vector3;
+use serde::{Deserialize, Serialize};
+use std::fmt::Debug;
 
 /// Type alias for 3D vector
 pub type VecN = Vector3<f64>;
@@ -47,9 +47,12 @@ impl Bounds {
     }
 
     pub fn contains(&self, point: &VecN) -> bool {
-        point.x >= self.min.x && point.x <= self.max.x &&
-        point.y >= self.min.y && point.y <= self.max.y &&
-        point.z >= self.min.z && point.z <= self.max.z
+        point.x >= self.min.x
+            && point.x <= self.max.x
+            && point.y >= self.min.y
+            && point.y <= self.max.y
+            && point.z >= self.min.z
+            && point.z <= self.max.z
     }
 }
 

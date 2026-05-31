@@ -1,15 +1,15 @@
-use std::sync::Arc;
-use std::collections::HashMap;
-use serde::{Deserialize, Serialize};
-use tokio::sync::RwLock;
-use tracing::{info, warn};
 use crate::{
     config::DatabaseConfig,
     error::Result,
-    rest::{Simulation, SimulationStatus, Agent, Space, SpaceType, Bounds, Position, SpatialQuery},
-    graphql::{Twin, TwinStatus, CreateTwinInput, UpdateTwinInput, SimulationResult, Metric},
+    graphql::{CreateTwinInput, Metric, SimulationResult, Twin, TwinStatus, UpdateTwinInput},
+    rest::{Agent, Bounds, Position, Simulation, SimulationStatus, Space, SpaceType, SpatialQuery},
 };
 use async_graphql::ID;
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::sync::Arc;
+use tokio::sync::RwLock;
+use tracing::{info, warn};
 
 /// In-memory store for simulations (fallback when SurrealDB is unavailable)
 #[derive(Default)]
@@ -45,30 +45,30 @@ impl DatabaseManager {
     /// Create a new database manager
     pub async fn new(config: &DatabaseConfig) -> Result<Self> {
         info!("Initializing database manager...");
-        
+
         // Try to connect to SurrealDB, fallback to in-memory if unavailable
         let connected = false; // Using in-memory for now to avoid connection issues
-        
+
         if !connected {
             warn!("SurrealDB unavailable, using in-memory storage");
         }
-        
+
         let mut manager = Self {
             store: Arc::new(RwLock::new(InMemoryStore::default())),
             config: config.clone(),
             connected,
         };
-        
+
         // Initialize with default data
         manager.init_default_data().await?;
-        
+
         Ok(manager)
     }
 
     /// Initialize with default demo data
     async fn init_default_data(&self) -> Result<()> {
         let mut store = self.store.write().await;
-        
+
         // Create a default simulation
         let sim = Simulation {
             id: "sim-001".to_string(),
@@ -81,20 +81,28 @@ impl DatabaseManager {
             updated_at: chrono::Utc::now().to_rfc3339(),
         };
         store.simulations.insert(sim.id.clone(), sim);
-        
+
         // Create default space
         let space = Space {
             id: "space-001".to_string(),
             simulation_id: "sim-001".to_string(),
             space_type: SpaceType::Continuous,
             bounds: Bounds {
-                min: Position { x: 0.0, y: 0.0, z: Some(0.0) },
-                max: Position { x: 100.0, y: 100.0, z: Some(100.0) },
+                min: Position {
+                    x: 0.0,
+                    y: 0.0,
+                    z: Some(0.0),
+                },
+                max: Position {
+                    x: 100.0,
+                    y: 100.0,
+                    z: Some(100.0),
+                },
             },
             agent_count: 0,
         };
         store.spaces.insert("sim-001".to_string(), space);
-        
+
         // Create a default twin
         let twin = TwinData {
             id: "twin-001".to_string(),
@@ -105,7 +113,7 @@ impl DatabaseManager {
             status: TwinStatus::Active,
         };
         store.twins.insert(twin.id.clone(), twin);
-        
+
         info!("Initialized default demo data");
         Ok(())
     }
@@ -146,31 +154,43 @@ impl DatabaseManager {
     /// Create a new simulation
     pub async fn create_simulation(&self, simulation: &Simulation) -> Result<()> {
         let mut store = self.store.write().await;
-        store.simulations.insert(simulation.id.clone(), simulation.clone());
-        
+        store
+            .simulations
+            .insert(simulation.id.clone(), simulation.clone());
+
         // Create associated space
         let space = Space {
             id: format!("space-{}", simulation.id),
             simulation_id: simulation.id.clone(),
             space_type: SpaceType::Continuous,
             bounds: Bounds {
-                min: Position { x: 0.0, y: 0.0, z: Some(0.0) },
-                max: Position { x: 100.0, y: 100.0, z: Some(100.0) },
+                min: Position {
+                    x: 0.0,
+                    y: 0.0,
+                    z: Some(0.0),
+                },
+                max: Position {
+                    x: 100.0,
+                    y: 100.0,
+                    z: Some(100.0),
+                },
             },
             agent_count: 0,
         };
         store.spaces.insert(simulation.id.clone(), space);
-        
+
         // Initialize empty agent map
         store.agents.insert(simulation.id.clone(), HashMap::new());
-        
+
         Ok(())
     }
 
     /// Update a simulation
     pub async fn update_simulation(&self, simulation: &Simulation) -> Result<()> {
         let mut store = self.store.write().await;
-        store.simulations.insert(simulation.id.clone(), simulation.clone());
+        store
+            .simulations
+            .insert(simulation.id.clone(), simulation.clone());
         Ok(())
     }
 
@@ -198,9 +218,16 @@ impl DatabaseManager {
     // ========================================================================
 
     /// List agents in a simulation
-    pub async fn list_agents(&self, simulation_id: &str, limit: usize, offset: usize) -> Result<Vec<Agent>> {
+    pub async fn list_agents(
+        &self,
+        simulation_id: &str,
+        limit: usize,
+        offset: usize,
+    ) -> Result<Vec<Agent>> {
         let store = self.store.read().await;
-        let agents = store.agents.get(simulation_id)
+        let agents = store
+            .agents
+            .get(simulation_id)
             .map(|m| m.values().cloned().collect::<Vec<_>>())
             .unwrap_or_default();
         Ok(agents.into_iter().skip(offset).take(limit).collect())
@@ -209,23 +236,31 @@ impl DatabaseManager {
     /// Count agents in a simulation
     pub async fn count_agents(&self, simulation_id: &str) -> Result<u64> {
         let store = self.store.read().await;
-        Ok(store.agents.get(simulation_id).map(|m| m.len()).unwrap_or(0) as u64)
+        Ok(store
+            .agents
+            .get(simulation_id)
+            .map(|m| m.len())
+            .unwrap_or(0) as u64)
     }
 
     /// Get an agent by ID
     pub async fn get_agent(&self, simulation_id: &str, agent_id: &str) -> Result<Option<Agent>> {
         let store = self.store.read().await;
-        Ok(store.agents.get(simulation_id).and_then(|m| m.get(agent_id).cloned()))
+        Ok(store
+            .agents
+            .get(simulation_id)
+            .and_then(|m| m.get(agent_id).cloned()))
     }
 
     /// Create an agent
     pub async fn create_agent(&self, agent: &Agent) -> Result<()> {
         let mut store = self.store.write().await;
-        store.agents
+        store
+            .agents
             .entry(agent.simulation_id.clone())
             .or_insert_with(HashMap::new)
             .insert(agent.id.clone(), agent.clone());
-        
+
         // Update space agent count
         if let Some(space) = store.spaces.get_mut(&agent.simulation_id) {
             space.agent_count += 1;
@@ -236,11 +271,12 @@ impl DatabaseManager {
     /// Delete an agent
     pub async fn delete_agent(&self, simulation_id: &str, agent_id: &str) -> Result<bool> {
         let mut store = self.store.write().await;
-        let existed = store.agents
+        let existed = store
+            .agents
             .get_mut(simulation_id)
             .map(|m| m.remove(agent_id).is_some())
             .unwrap_or(false);
-        
+
         if existed {
             if let Some(space) = store.spaces.get_mut(simulation_id) {
                 space.agent_count = space.agent_count.saturating_sub(1);
@@ -260,17 +296,24 @@ impl DatabaseManager {
     }
 
     /// Query space
-    pub async fn query_space(&self, simulation_id: &str, query: &SpatialQuery) -> Result<Vec<Agent>> {
+    pub async fn query_space(
+        &self,
+        simulation_id: &str,
+        query: &SpatialQuery,
+    ) -> Result<Vec<Agent>> {
         let store = self.store.read().await;
-        let agents = store.agents.get(simulation_id)
+        let agents = store
+            .agents
+            .get(simulation_id)
             .map(|m| m.values().cloned().collect::<Vec<_>>())
             .unwrap_or_default();
-        
+
         // Filter by spatial query
         match query.query_type {
             crate::rest::SpatialQueryType::RadiusSearch => {
                 if let (Some(pos), Some(radius)) = (&query.position, query.radius) {
-                    Ok(agents.into_iter()
+                    Ok(agents
+                        .into_iter()
                         .filter(|a| {
                             if let Some(ref agent_pos) = a.position {
                                 let dx = agent_pos.x - pos.x;
@@ -287,7 +330,8 @@ impl DatabaseManager {
             }
             crate::rest::SpatialQueryType::NearestNeighbors => {
                 if let (Some(pos), Some(k)) = (&query.position, query.k) {
-                    let mut agents_with_dist: Vec<_> = agents.into_iter()
+                    let mut agents_with_dist: Vec<_> = agents
+                        .into_iter()
                         .filter_map(|a| {
                             if let Some(ref agent_pos) = a.position {
                                 let dx = agent_pos.x - pos.x;
@@ -300,18 +344,23 @@ impl DatabaseManager {
                         })
                         .collect();
                     agents_with_dist.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
-                    Ok(agents_with_dist.into_iter().take(k).map(|(a, _)| a).collect())
+                    Ok(agents_with_dist
+                        .into_iter()
+                        .take(k)
+                        .map(|(a, _)| a)
+                        .collect())
                 } else {
                     Ok(vec![])
                 }
             }
             crate::rest::SpatialQueryType::AgentsAt => {
                 if let Some(pos) = &query.position {
-                    Ok(agents.into_iter()
+                    Ok(agents
+                        .into_iter()
                         .filter(|a| {
                             if let Some(ref agent_pos) = a.position {
-                                (agent_pos.x - pos.x).abs() < 0.001 && 
-                                (agent_pos.y - pos.y).abs() < 0.001
+                                (agent_pos.x - pos.x).abs() < 0.001
+                                    && (agent_pos.y - pos.y).abs() < 0.001
                             } else {
                                 false
                             }
@@ -335,7 +384,12 @@ impl DatabaseManager {
     }
 
     /// List twins with pagination
-    pub async fn list_twins(&self, limit: usize, offset: usize, _status: Option<TwinStatus>) -> Result<Vec<TwinData>> {
+    pub async fn list_twins(
+        &self,
+        limit: usize,
+        offset: usize,
+        _status: Option<TwinStatus>,
+    ) -> Result<Vec<TwinData>> {
         let store = self.store.read().await;
         let mut twins: Vec<_> = store.twins.values().cloned().collect();
         twins.sort_by(|a, b| b.created_at.cmp(&a.created_at));
@@ -347,7 +401,7 @@ impl DatabaseManager {
         let mut store = self.store.write().await;
         let id = uuid::Uuid::new_v4().to_string();
         let now = chrono::Utc::now().to_rfc3339();
-        
+
         let twin_data = TwinData {
             id: id.clone(),
             name: input.name.clone(),
@@ -357,7 +411,7 @@ impl DatabaseManager {
             status: TwinStatus::Active,
         };
         store.twins.insert(id.clone(), twin_data);
-        
+
         Ok(Twin {
             id: ID(id),
             name: input.name,
@@ -372,7 +426,7 @@ impl DatabaseManager {
     pub async fn update_twin(&self, input: UpdateTwinInput) -> Result<Twin> {
         let mut store = self.store.write().await;
         let id = input.id.to_string();
-        
+
         if let Some(twin) = store.twins.get_mut(&id) {
             if let Some(name) = input.name {
                 twin.name = name;
@@ -384,7 +438,7 @@ impl DatabaseManager {
                 twin.status = status;
             }
             twin.updated_at = chrono::Utc::now().to_rfc3339();
-            
+
             Ok(Twin {
                 id: ID(twin.id.clone()),
                 name: twin.name.clone(),
@@ -394,7 +448,10 @@ impl DatabaseManager {
                 status: twin.status,
             })
         } else {
-            Err(crate::error::Error::NotFound(format!("Twin not found: {}", id)))
+            Err(crate::error::Error::NotFound(format!(
+                "Twin not found: {}",
+                id
+            )))
         }
     }
 
@@ -408,7 +465,9 @@ impl DatabaseManager {
     pub async fn search_twins(&self, query: &str, limit: usize) -> Result<Vec<TwinData>> {
         let store = self.store.read().await;
         let query_lower = query.to_lowercase();
-        Ok(store.twins.values()
+        Ok(store
+            .twins
+            .values()
             .filter(|t| t.name.to_lowercase().contains(&query_lower))
             .take(limit)
             .cloned()
@@ -416,7 +475,11 @@ impl DatabaseManager {
     }
 
     /// Get simulation results for a twin
-    pub async fn get_simulation_results(&self, _twin_id: &str, limit: usize) -> Result<Vec<SimulationResult>> {
+    pub async fn get_simulation_results(
+        &self,
+        _twin_id: &str,
+        limit: usize,
+    ) -> Result<Vec<SimulationResult>> {
         // Return mock simulation results
         Ok((0..limit.min(5))
             .map(|i| SimulationResult {
@@ -473,9 +536,9 @@ impl MilvusManager {
         if let Some(token) = &config.auth_token {
             options.token = token.clone();
         }
-        
+
         let client = MilvusClient::connect(options).await?;
-        
+
         // Get or create default collection
         let collection = match client
             .get_collection(&config.default_collection)
@@ -491,7 +554,7 @@ impl MilvusManager {
                 ).await.unwrap()
             }
         };
-        
+
         Ok(Self {
             client: Arc::new(RwLock::new(client)),
             collection: Arc::new(RwLock::new(collection)),
@@ -549,4 +612,4 @@ impl MilvusManager {
         Ok(())
     }
 }
-*/ 
+*/

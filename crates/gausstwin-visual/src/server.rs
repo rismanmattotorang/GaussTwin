@@ -1,21 +1,20 @@
-use std::sync::Arc;
-use tokio::sync::RwLock;
 use axum::{
-    routing::{get, post},
-    Router,
-    extract::{State, Path},
+    extract::{Path, State},
     response::IntoResponse,
-    Json,
+    routing::{get, post},
+    Json, Router,
 };
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 use serde_json::json;
 use serde_json::Value;
+use std::sync::Arc;
+use tokio::sync::RwLock;
 
 use std::net::SocketAddr;
 
 use crate::{
-    dashboard::{Dashboard, DashboardConfig, DashboardId},
     analytics::Context,
+    dashboard::{Dashboard, DashboardConfig, DashboardId},
     scenarios::{ScenarioConfig, ScenarioId},
     SystemState,
 };
@@ -24,7 +23,10 @@ type SharedState = Arc<RwLock<SystemState>>;
 
 pub async fn start_server(addr: &str, state: SharedState) -> crate::Result<()> {
     let app = Router::new()
-        .route("/api/dashboards", get(list_dashboards).post(create_dashboard))
+        .route(
+            "/api/dashboards",
+            get(list_dashboards).post(create_dashboard),
+        )
         .route("/api/dashboards/:id", get(get_dashboard))
         .route("/api/analytics/predict", post(predict))
         .route("/api/analytics/recommend", post(recommend))
@@ -33,12 +35,14 @@ pub async fn start_server(addr: &str, state: SharedState) -> crate::Result<()> {
         .route("/ws", get(websocket_handler))
         .with_state(state);
 
-    let addr: SocketAddr = addr.parse()
+    let addr: SocketAddr = addr
+        .parse()
         .map_err(|e| crate::Error::Config(format!("Failed to parse address: {}", e)))?;
 
-    let listener = tokio::net::TcpListener::bind(addr).await
+    let listener = tokio::net::TcpListener::bind(addr)
+        .await
         .map_err(|e| crate::Error::Server(format!("Failed to bind to address: {}", e)))?;
-    
+
     axum::Server::from_tcp(listener.into_std()?)
         .map_err(|e| crate::Error::Server(format!("Failed to create server: {}", e)))?
         .serve(app.into_make_service())
@@ -49,16 +53,18 @@ pub async fn start_server(addr: &str, state: SharedState) -> crate::Result<()> {
 }
 
 // Dashboard endpoints
-async fn list_dashboards(
-    State(state): State<SharedState>,
-) -> impl IntoResponse {
+async fn list_dashboards(State(state): State<SharedState>) -> impl IntoResponse {
     let state = state.read().await;
-    let dashboards: Vec<_> = state.dashboards.iter()
-        .map(|d| json!({
-            "id": d.id(),
-            "title": d.config.title,
-            "description": d.config.description,
-        }))
+    let dashboards: Vec<_> = state
+        .dashboards
+        .iter()
+        .map(|d| {
+            json!({
+                "id": d.id(),
+                "title": d.config.title,
+                "description": d.config.description,
+            })
+        })
         .collect();
     Json(json!(dashboards))
 }
@@ -148,10 +154,7 @@ async fn websocket_handler(
     ws.on_upgrade(|socket| handle_websocket(socket, state))
 }
 
-async fn handle_websocket(
-    _socket: axum::extract::ws::WebSocket,
-    _state: SharedState,
-) {
+async fn handle_websocket(_socket: axum::extract::ws::WebSocket, _state: SharedState) {
     // TODO: Implement WebSocket handling for real-time updates
 }
 
@@ -167,4 +170,4 @@ struct DashboardSummary {
 struct PredictionRequest {
     data: Vec<f64>,
     horizon: usize,
-} 
+}

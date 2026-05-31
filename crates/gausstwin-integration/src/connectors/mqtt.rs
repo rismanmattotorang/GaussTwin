@@ -233,7 +233,10 @@ impl MqttConnector {
 
         opts.set_keep_alive(Duration::from_secs(self.mqtt_config.keep_alive_secs));
         opts.set_clean_session(self.mqtt_config.clean_session);
-        opts.set_max_packet_size(self.mqtt_config.max_packet_size, self.mqtt_config.max_packet_size);
+        opts.set_max_packet_size(
+            self.mqtt_config.max_packet_size,
+            self.mqtt_config.max_packet_size,
+        );
         opts.set_inflight(self.mqtt_config.inflight_cap);
 
         if let Some(auth) = &self.mqtt_config.auth {
@@ -487,7 +490,9 @@ impl Connector for MqttConnector {
             let _ = client.disconnect().await;
         }
 
-        self.internal_metrics.connected.store(false, Ordering::SeqCst);
+        self.internal_metrics
+            .connected
+            .store(false, Ordering::SeqCst);
         info!("MQTT disconnected");
         Ok(())
     }
@@ -539,7 +544,10 @@ impl MqttConnector {
             },
             connection_failures: self.internal_metrics.reconnections.load(Ordering::Relaxed),
             messages_sent: self.internal_metrics.messages_sent.load(Ordering::Relaxed),
-            messages_received: self.internal_metrics.messages_received.load(Ordering::Relaxed),
+            messages_received: self
+                .internal_metrics
+                .messages_received
+                .load(Ordering::Relaxed),
             errors: self.internal_metrics.errors.load(Ordering::Relaxed),
             average_latency_ms: avg_latency,
             bytes_sent: self.internal_metrics.bytes_sent.load(Ordering::Relaxed),

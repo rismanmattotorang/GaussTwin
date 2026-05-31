@@ -1,9 +1,9 @@
-use serde::{Serialize, Deserialize};
 use chrono::{DateTime, Utc};
-use uuid::Uuid;
 use gausstwin_vec;
-use serde_json::Value as JsonValue;
+use serde::{Deserialize, Serialize};
 use serde_json;
+use serde_json::Value as JsonValue;
+use uuid::Uuid;
 
 /// Vector data representation used by the higher-level data APIs.
 /// Only the raw vector values and basic metadata are stored here so that
@@ -108,11 +108,17 @@ impl<'de> Deserialize<'de> for Value {
         match &json {
             serde_json::Value::Object(o) => {
                 if o.contains_key("vector") {
-                    Ok(Value::Vector(VectorData::deserialize(json.clone()).map_err(serde::de::Error::custom)?))
+                    Ok(Value::Vector(
+                        VectorData::deserialize(json.clone()).map_err(serde::de::Error::custom)?,
+                    ))
                 } else if o.contains_key("value") {
-                    Ok(Value::Scalar(ScalarData::deserialize(json.clone()).map_err(serde::de::Error::custom)?))
+                    Ok(Value::Scalar(
+                        ScalarData::deserialize(json.clone()).map_err(serde::de::Error::custom)?,
+                    ))
                 } else if o.contains_key("vector") && o.contains_key("value") {
-                    Ok(Value::Hybrid(HybridData::deserialize(json.clone()).map_err(serde::de::Error::custom)?))
+                    Ok(Value::Hybrid(
+                        HybridData::deserialize(json.clone()).map_err(serde::de::Error::custom)?,
+                    ))
                 } else {
                     Err(serde::de::Error::custom("Invalid format"))
                 }
@@ -225,4 +231,4 @@ pub struct SearchQuery {
     pub limit: usize,
     pub offset: usize,
     pub filters: Option<serde_json::Value>,
-} 
+}

@@ -1,11 +1,11 @@
 //! GaussTwin Co-Simulation Framework
-//! 
+//!
 //! Provides a unified co-simulation framework supporting both FMI 2.0 and HLA IEEE-1516e standards.
 //! This crate enables seamless integration of different simulation models and federates through
 //! standardized interfaces and protocols.
 //!
 //! # Features
-//! 
+//!
 //! - FMI 2.0 Support:
 //!   - Model Exchange
 //!   - Co-Simulation
@@ -35,16 +35,16 @@ use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use dashmap::DashMap;
 use metrics::{counter, gauge};
-use parking_lot::{RwLock, Mutex};
+use parking_lot::{Mutex, RwLock};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::{broadcast, mpsc};
 use tracing::{debug, error, info, warn};
 
 // Re-exports
-pub use crate::common::time::SimulationTime;
 pub use crate::common::data::DataValue;
 pub use crate::common::sync::SyncMode;
+pub use crate::common::time::SimulationTime;
 
 // Modules
 pub mod common;
@@ -221,4 +221,4 @@ pub enum ErrorSeverity {
     Critical,
 }
 
-// Implementations will be in respective module files 
+// Implementations will be in respective module files

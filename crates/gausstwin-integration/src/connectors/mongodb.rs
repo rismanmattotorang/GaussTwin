@@ -273,7 +273,7 @@ impl MongoDbConnector {
     /// Create a new MongoDB connector
     pub async fn new(config: Config) -> Result<Self> {
         let mongodb_config = Self::parse_mongodb_config(&config)?;
-        Ok(Self { 
+        Ok(Self {
             config,
             mongodb_config,
             state: Arc::new(ConnectorState::default()),
@@ -347,7 +347,9 @@ impl MongoDbConnector {
                 .push(doc_with_id);
         }
 
-        self.internal_metrics.inserts.fetch_add(1, Ordering::Relaxed);
+        self.internal_metrics
+            .inserts
+            .fetch_add(1, Ordering::Relaxed);
         self.record_latency(start.elapsed()).await;
 
         debug!("Inserted document into {}", collection);
@@ -556,15 +558,23 @@ impl MongoDbConnector {
                 let mut new_doc = serde_json::Map::new();
                 new_doc.insert("_id".to_string(), serde_json::Value::String(id.clone()));
 
-                collections.insert(collection.to_string(), vec![serde_json::Value::Object(new_doc)]);
+                collections.insert(
+                    collection.to_string(),
+                    vec![serde_json::Value::Object(new_doc)],
+                );
                 result.upserted_id = Some(id);
             }
         }
 
-        self.internal_metrics.updates.fetch_add(1, Ordering::Relaxed);
+        self.internal_metrics
+            .updates
+            .fetch_add(1, Ordering::Relaxed);
         self.record_latency(start.elapsed()).await;
 
-        debug!("Updated {} documents in {}", result.modified_count, collection);
+        debug!(
+            "Updated {} documents in {}",
+            result.modified_count, collection
+        );
         Ok(result)
     }
 
@@ -608,7 +618,9 @@ impl MongoDbConnector {
             }
         }
 
-        self.internal_metrics.updates.fetch_add(1, Ordering::Relaxed);
+        self.internal_metrics
+            .updates
+            .fetch_add(1, Ordering::Relaxed);
         self.record_latency(start.elapsed()).await;
 
         Ok(result)
@@ -644,7 +656,9 @@ impl MongoDbConnector {
             }
         }
 
-        self.internal_metrics.deletes.fetch_add(1, Ordering::Relaxed);
+        self.internal_metrics
+            .deletes
+            .fetch_add(1, Ordering::Relaxed);
         self.record_latency(start.elapsed()).await;
 
         debug!("Deleted {} documents from {}", deleted_count, collection);
@@ -673,7 +687,9 @@ impl MongoDbConnector {
             }
         }
 
-        self.internal_metrics.deletes.fetch_add(1, Ordering::Relaxed);
+        self.internal_metrics
+            .deletes
+            .fetch_add(1, Ordering::Relaxed);
         self.record_latency(start.elapsed()).await;
 
         Ok(DeleteResult { deleted_count })
@@ -692,9 +708,7 @@ impl MongoDbConnector {
         let start = Instant::now();
 
         // Simplified aggregation - just returns all documents
-        let results: Vec<T> = self
-            .find(collection, FindOptions::default())
-            .await?;
+        let results: Vec<T> = self.find(collection, FindOptions::default()).await?;
 
         self.internal_metrics
             .aggregations
@@ -752,7 +766,9 @@ impl MongoDbConnector {
 
         let count = if let Some(coll) = collections.get(collection) {
             if let Some(f) = filter {
-                coll.iter().filter(|doc| self.matches_filter(doc, &f)).count() as u64
+                coll.iter()
+                    .filter(|doc| self.matches_filter(doc, &f))
+                    .count() as u64
             } else {
                 coll.len() as u64
             }
@@ -812,7 +828,10 @@ impl Connector for MongoDbConnector {
         self.state.connected.store(true, Ordering::SeqCst);
         *self.internal_metrics.connected_at.write().await = Some(Instant::now());
 
-        info!("Connected to MongoDB database: {}", self.mongodb_config.database);
+        info!(
+            "Connected to MongoDB database: {}",
+            self.mongodb_config.database
+        );
         Ok(())
     }
 
@@ -982,7 +1001,10 @@ mod tests {
         connector.insert_one("test_collection", &doc).await.unwrap();
 
         let result = connector
-            .delete_one("test_collection", serde_json::json!({"name": "delete_test"}))
+            .delete_one(
+                "test_collection",
+                serde_json::json!({"name": "delete_test"}),
+            )
             .await
             .unwrap();
 

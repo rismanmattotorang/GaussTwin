@@ -1,15 +1,12 @@
 //! Data exchange and management
-//! 
+//!
 //! Provides robust data handling capabilities:
 //! - Type-safe data exchange
 //! - Serialization/deserialization
 //! - Data validation
 //! - Memory management
 
-use std::{
-    collections::HashMap,
-    sync::Arc,
-};
+use std::{collections::HashMap, sync::Arc};
 
 use bytes::Bytes;
 use serde::{Deserialize, Serialize};
@@ -22,28 +19,28 @@ use super::{CosimError, Result};
 pub enum DataValue {
     /// Real number (64-bit float)
     Real(f64),
-    
+
     /// Integer (64-bit signed)
     Integer(i64),
-    
+
     /// Boolean
     Boolean(bool),
-    
+
     /// String
     String(String),
-    
+
     /// Enumeration
     Enum {
         value: String,
         possible_values: Vec<String>,
     },
-    
+
     /// Binary data
     Binary(Bytes),
-    
+
     /// Array of values
     Array(Vec<DataValue>),
-    
+
     /// Structured data
     Struct(HashMap<String, DataValue>),
 }
@@ -54,9 +51,10 @@ impl DataValue {
         match self {
             DataValue::Real(v) => Ok(*v),
             DataValue::Integer(v) => Ok(*v as f64),
-            _ => Err(CosimError::DataExchange(
-                format!("Cannot convert {:?} to real", self)
-            )),
+            _ => Err(CosimError::DataExchange(format!(
+                "Cannot convert {:?} to real",
+                self
+            ))),
         }
     }
 
@@ -65,9 +63,10 @@ impl DataValue {
         match self {
             DataValue::Integer(v) => Ok(*v),
             DataValue::Real(v) => Ok(*v as i64),
-            _ => Err(CosimError::DataExchange(
-                format!("Cannot convert {:?} to integer", self)
-            )),
+            _ => Err(CosimError::DataExchange(format!(
+                "Cannot convert {:?} to integer",
+                self
+            ))),
         }
     }
 
@@ -75,9 +74,10 @@ impl DataValue {
     pub fn as_boolean(&self) -> Result<bool> {
         match self {
             DataValue::Boolean(v) => Ok(*v),
-            _ => Err(CosimError::DataExchange(
-                format!("Cannot convert {:?} to boolean", self)
-            )),
+            _ => Err(CosimError::DataExchange(format!(
+                "Cannot convert {:?} to boolean",
+                self
+            ))),
         }
     }
 
@@ -86,9 +86,10 @@ impl DataValue {
         match self {
             DataValue::String(v) => Ok(v.clone()),
             DataValue::Enum { value, .. } => Ok(value.clone()),
-            _ => Err(CosimError::DataExchange(
-                format!("Cannot convert {:?} to string", self)
-            )),
+            _ => Err(CosimError::DataExchange(format!(
+                "Cannot convert {:?} to string",
+                self
+            ))),
         }
     }
 
@@ -96,9 +97,10 @@ impl DataValue {
     pub fn as_binary(&self) -> Result<Bytes> {
         match self {
             DataValue::Binary(v) => Ok(v.clone()),
-            _ => Err(CosimError::DataExchange(
-                format!("Cannot convert {:?} to binary", self)
-            )),
+            _ => Err(CosimError::DataExchange(format!(
+                "Cannot convert {:?} to binary",
+                self
+            ))),
         }
     }
 
@@ -108,49 +110,55 @@ impl DataValue {
             (DataValue::Real(v), DataSchema::Real { min, max }) => {
                 if let Some(min) = min {
                     if *v < *min {
-                        return Err(CosimError::DataExchange(
-                            format!("Value {} below minimum {}", v, min)
-                        ));
+                        return Err(CosimError::DataExchange(format!(
+                            "Value {} below minimum {}",
+                            v, min
+                        )));
                     }
                 }
                 if let Some(max) = max {
                     if *v > *max {
-                        return Err(CosimError::DataExchange(
-                            format!("Value {} above maximum {}", v, max)
-                        ));
+                        return Err(CosimError::DataExchange(format!(
+                            "Value {} above maximum {}",
+                            v, max
+                        )));
                     }
                 }
             }
             (DataValue::Integer(v), DataSchema::Integer { min, max }) => {
                 if let Some(min) = min {
                     if *v < *min {
-                        return Err(CosimError::DataExchange(
-                            format!("Value {} below minimum {}", v, min)
-                        ));
+                        return Err(CosimError::DataExchange(format!(
+                            "Value {} below minimum {}",
+                            v, min
+                        )));
                     }
                 }
                 if let Some(max) = max {
                     if *v > *max {
-                        return Err(CosimError::DataExchange(
-                            format!("Value {} above maximum {}", v, max)
-                        ));
+                        return Err(CosimError::DataExchange(format!(
+                            "Value {} above maximum {}",
+                            v, max
+                        )));
                     }
                 }
             }
             (DataValue::String(v), DataSchema::String { pattern }) => {
                 if let Some(pattern) = pattern {
                     if !pattern.is_match(v) {
-                        return Err(CosimError::DataExchange(
-                            format!("Value {} does not match pattern {}", v, pattern)
-                        ));
+                        return Err(CosimError::DataExchange(format!(
+                            "Value {} does not match pattern {}",
+                            v, pattern
+                        )));
                     }
                 }
             }
             (DataValue::Enum { value, .. }, DataSchema::Enum { values }) => {
                 if !values.contains(value) {
-                    return Err(CosimError::DataExchange(
-                        format!("Invalid enum value: {}", value)
-                    ));
+                    return Err(CosimError::DataExchange(format!(
+                        "Invalid enum value: {}",
+                        value
+                    )));
                 }
             }
             (DataValue::Array(arr), DataSchema::Array { item_schema }) => {
@@ -163,15 +171,19 @@ impl DataValue {
                     if let Some(value) = map.get(key) {
                         value.validate(schema)?;
                     } else if schema.is_required() {
-                        return Err(CosimError::DataExchange(
-                            format!("Missing required field: {}", key)
-                        ));
+                        return Err(CosimError::DataExchange(format!(
+                            "Missing required field: {}",
+                            key
+                        )));
                     }
                 }
             }
-            _ => return Err(CosimError::DataExchange(
-                format!("Type mismatch: value {:?} does not match schema {:?}", self, schema)
-            )),
+            _ => {
+                return Err(CosimError::DataExchange(format!(
+                    "Type mismatch: value {:?} does not match schema {:?}",
+                    self, schema
+                )))
+            }
         }
         Ok(())
     }
@@ -181,45 +193,31 @@ impl DataValue {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum DataSchema {
     /// Real number schema
-    Real {
-        min: Option<f64>,
-        max: Option<f64>,
-    },
-    
+    Real { min: Option<f64>, max: Option<f64> },
+
     /// Integer schema
-    Integer {
-        min: Option<i64>,
-        max: Option<i64>,
-    },
-    
+    Integer { min: Option<i64>, max: Option<i64> },
+
     /// Boolean schema
     Boolean,
-    
+
     /// String schema
     String {
         #[serde(with = "serde_regex")]
         pattern: Option<regex::Regex>,
     },
-    
+
     /// Enum schema
-    Enum {
-        values: Vec<String>,
-    },
-    
+    Enum { values: Vec<String> },
+
     /// Binary schema
-    Binary {
-        max_size: Option<usize>,
-    },
-    
+    Binary { max_size: Option<usize> },
+
     /// Array schema
-    Array {
-        item_schema: Box<DataSchema>,
-    },
-    
+    Array { item_schema: Box<DataSchema> },
+
     /// Struct schema
-    Struct {
-        fields: HashMap<String, DataSchema>,
-    },
+    Struct { fields: HashMap<String, DataSchema> },
 }
 
 impl DataSchema {
@@ -235,10 +233,10 @@ impl DataSchema {
 pub struct DataBuffer {
     /// Buffer capacity
     capacity: usize,
-    
+
     /// Current size
     size: usize,
-    
+
     /// Data storage
     storage: Vec<u8>,
 }
@@ -257,7 +255,7 @@ impl DataBuffer {
     pub fn write(&mut self, data: &[u8]) -> Result<()> {
         if self.size + data.len() > self.capacity {
             return Err(CosimError::DataExchange(
-                "Buffer capacity exceeded".to_string()
+                "Buffer capacity exceeded".to_string(),
             ));
         }
         self.storage.extend_from_slice(data);
@@ -269,7 +267,7 @@ impl DataBuffer {
     pub fn read(&mut self, len: usize) -> Result<Vec<u8>> {
         if len > self.size {
             return Err(CosimError::DataExchange(
-                "Not enough data in buffer".to_string()
+                "Not enough data in buffer".to_string(),
             ));
         }
         let data = self.storage[..len].to_vec();
@@ -335,18 +333,18 @@ mod tests {
     #[test]
     fn test_data_buffer() {
         let mut buffer = DataBuffer::new(100);
-        
+
         // Write data
         buffer.write(&[1, 2, 3]).unwrap();
         assert_eq!(buffer.size(), 3);
-        
+
         // Read data
         let data = buffer.read(2).unwrap();
         assert_eq!(data, vec![1, 2]);
         assert_eq!(buffer.size(), 1);
-        
+
         // Clear buffer
         buffer.clear();
         assert!(buffer.is_empty());
     }
-} 
+}

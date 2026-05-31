@@ -2,6 +2,7 @@
 //!
 //! RESTful endpoints for the GaussTwin API server.
 
+use crate::{AppState, Error, Result};
 use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
@@ -11,9 +12,8 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use tracing::{info, error};
+use tracing::{error, info};
 use uuid::Uuid;
-use crate::{AppState, Error, Result};
 
 // ============================================================================
 // Types
@@ -265,7 +265,10 @@ pub fn create_router(state: Arc<AppState>) -> Router<Arc<AppState>> {
         .route("/auth/register", post(register_handler))
         .route("/auth/refresh", post(refresh_handler))
         // Simulations
-        .route("/simulations", get(list_simulations).post(create_simulation))
+        .route(
+            "/simulations",
+            get(list_simulations).post(create_simulation),
+        )
         .route(
             "/simulations/:id",
             get(get_simulation)
@@ -278,7 +281,10 @@ pub fn create_router(state: Arc<AppState>) -> Router<Arc<AppState>> {
         .route("/simulations/:id/step", post(step_simulation))
         .route("/simulations/:id/metrics", get(get_simulation_metrics))
         // Agents
-        .route("/simulations/:id/agents", get(list_agents).post(create_agent))
+        .route(
+            "/simulations/:id/agents",
+            get(list_agents).post(create_agent),
+        )
         .route(
             "/simulations/:id/agents/:agent_id",
             get(get_agent).delete(delete_agent),
@@ -301,7 +307,7 @@ async fn login_handler(
     Json(request): Json<LoginRequest>,
 ) -> impl IntoResponse {
     info!("Login attempt for: {}", request.email);
-    
+
     let user = UserResponse {
         id: "user-001".to_string(),
         email: request.email,
@@ -310,7 +316,7 @@ async fn login_handler(
         permissions: vec!["all".to_string()],
         created_at: chrono::Utc::now().to_rfc3339(),
     };
-    
+
     Json(AuthResponse {
         user,
         access_token: "mock-access-token".to_string(),
@@ -324,7 +330,7 @@ async fn register_handler(
     Json(request): Json<RegisterRequest>,
 ) -> impl IntoResponse {
     info!("Registration attempt for: {}", request.email);
-    
+
     let user = UserResponse {
         id: Uuid::new_v4().to_string(),
         email: request.email,
@@ -333,7 +339,7 @@ async fn register_handler(
         permissions: vec!["read".to_string(), "write".to_string()],
         created_at: chrono::Utc::now().to_rfc3339(),
     };
-    
+
     Json(AuthResponse {
         user,
         access_token: "mock-access-token".to_string(),
@@ -357,11 +363,9 @@ async fn refresh_handler(
 // ============================================================================
 
 /// Health check endpoint
-async fn health_check(
-    State(state): State<Arc<AppState>>,
-) -> impl IntoResponse {
+async fn health_check(State(state): State<Arc<AppState>>) -> impl IntoResponse {
     state.metrics.increment_counter("api.health.calls", 1, None);
-    
+
     Json(serde_json::json!({
         "status": "ok",
         "timestamp": chrono::Utc::now().to_rfc3339(),
@@ -370,9 +374,7 @@ async fn health_check(
 }
 
 /// Server info endpoint
-async fn server_info(
-    State(state): State<Arc<AppState>>,
-) -> impl IntoResponse {
+async fn server_info(State(state): State<Arc<AppState>>) -> impl IntoResponse {
     Json(serde_json::json!({
         "name": "GaussTwin API Server",
         "version": env!("CARGO_PKG_VERSION"),
@@ -402,17 +404,25 @@ async fn list_simulations(
     State(state): State<Arc<AppState>>,
     Query(params): Query<PaginationParams>,
 ) -> impl IntoResponse {
-    info!("Listing simulations, page: {:?}, per_page: {:?}", params.page, params.per_page);
-    state.metrics.increment_counter("api.simulations.list", 1, None);
+    info!(
+        "Listing simulations, page: {:?}, per_page: {:?}",
+        params.page, params.per_page
+    );
+    state
+        .metrics
+        .increment_counter("api.simulations.list", 1, None);
 
     // Get simulations from database
-    let result = state.db.list_simulations(params.per_page() as usize, params.offset()).await;
-    
+    let result = state
+        .db
+        .list_simulations(params.per_page() as usize, params.offset())
+        .await;
+
     match result {
         Ok(simulations) => {
             let total = state.db.count_simulations().await.unwrap_or(0);
             let total_pages = (total as f64 / params.per_page() as f64).ceil() as u32;
-            
+
             Json(ApiResponse::success(PaginatedResponse {
                 data: simulations,
                 pagination: PaginationInfo {
@@ -421,14 +431,19 @@ async fn list_simulations(
                     total,
                     total_pages,
                 },
-            })).into_response()
+            }))
+            .into_response()
         }
         Err(e) => {
             error!("Failed to list simulations: {}", e);
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ApiResponse::<()>::error(format!("Failed to list simulations: {}", e))),
-            ).into_response()
+                Json(ApiResponse::<()>::error(format!(
+                    "Failed to list simulations: {}",
+                    e
+                ))),
+            )
+                .into_response()
         }
     }
 }
@@ -439,20 +454,30 @@ async fn get_simulation(
     Path(id): Path<String>,
 ) -> impl IntoResponse {
     info!("Getting simulation: {}", id);
-    state.metrics.increment_counter("api.simulations.get", 1, None);
+    state
+        .metrics
+        .increment_counter("api.simulations.get", 1, None);
 
     match state.db.get_simulation(&id).await {
         Ok(Some(simulation)) => Json(ApiResponse::success(simulation)).into_response(),
         Ok(None) => (
             StatusCode::NOT_FOUND,
-            Json(ApiResponse::<()>::error(format!("Simulation not found: {}", id))),
-        ).into_response(),
+            Json(ApiResponse::<()>::error(format!(
+                "Simulation not found: {}",
+                id
+            ))),
+        )
+            .into_response(),
         Err(e) => {
             error!("Failed to get simulation: {}", e);
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ApiResponse::<()>::error(format!("Failed to get simulation: {}", e))),
-            ).into_response()
+                Json(ApiResponse::<()>::error(format!(
+                    "Failed to get simulation: {}",
+                    e
+                ))),
+            )
+                .into_response()
         }
     }
 }
@@ -463,7 +488,9 @@ async fn create_simulation(
     Json(request): Json<CreateSimulationRequest>,
 ) -> impl IntoResponse {
     info!("Creating simulation: {}", request.name);
-    state.metrics.increment_counter("api.simulations.create", 1, None);
+    state
+        .metrics
+        .increment_counter("api.simulations.create", 1, None);
 
     let simulation = Simulation {
         id: Uuid::new_v4().to_string(),
@@ -477,16 +504,17 @@ async fn create_simulation(
     };
 
     match state.db.create_simulation(&simulation).await {
-        Ok(_) => (
-            StatusCode::CREATED,
-            Json(ApiResponse::success(simulation)),
-        ).into_response(),
+        Ok(_) => (StatusCode::CREATED, Json(ApiResponse::success(simulation))).into_response(),
         Err(e) => {
             error!("Failed to create simulation: {}", e);
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ApiResponse::<()>::error(format!("Failed to create simulation: {}", e))),
-            ).into_response()
+                Json(ApiResponse::<()>::error(format!(
+                    "Failed to create simulation: {}",
+                    e
+                ))),
+            )
+                .into_response()
         }
     }
 }
@@ -498,7 +526,9 @@ async fn update_simulation(
     Json(request): Json<UpdateSimulationRequest>,
 ) -> impl IntoResponse {
     info!("Updating simulation: {}", id);
-    state.metrics.increment_counter("api.simulations.update", 1, None);
+    state
+        .metrics
+        .increment_counter("api.simulations.update", 1, None);
 
     // Get existing simulation
     let existing = match state.db.get_simulation(&id).await {
@@ -506,14 +536,22 @@ async fn update_simulation(
         Ok(None) => {
             return (
                 StatusCode::NOT_FOUND,
-                Json(ApiResponse::<()>::error(format!("Simulation not found: {}", id))),
-            ).into_response();
+                Json(ApiResponse::<()>::error(format!(
+                    "Simulation not found: {}",
+                    id
+                ))),
+            )
+                .into_response();
         }
         Err(e) => {
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ApiResponse::<()>::error(format!("Failed to get simulation: {}", e))),
-            ).into_response();
+                Json(ApiResponse::<()>::error(format!(
+                    "Failed to get simulation: {}",
+                    e
+                ))),
+            )
+                .into_response();
         }
     };
 
@@ -531,8 +569,12 @@ async fn update_simulation(
             error!("Failed to update simulation: {}", e);
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ApiResponse::<()>::error(format!("Failed to update simulation: {}", e))),
-            ).into_response()
+                Json(ApiResponse::<()>::error(format!(
+                    "Failed to update simulation: {}",
+                    e
+                ))),
+            )
+                .into_response()
         }
     }
 }
@@ -543,20 +585,30 @@ async fn delete_simulation(
     Path(id): Path<String>,
 ) -> impl IntoResponse {
     info!("Deleting simulation: {}", id);
-    state.metrics.increment_counter("api.simulations.delete", 1, None);
+    state
+        .metrics
+        .increment_counter("api.simulations.delete", 1, None);
 
     match state.db.delete_simulation(&id).await {
         Ok(true) => (StatusCode::NO_CONTENT, Json(ApiResponse::success(()))).into_response(),
         Ok(false) => (
             StatusCode::NOT_FOUND,
-            Json(ApiResponse::<()>::error(format!("Simulation not found: {}", id))),
-        ).into_response(),
+            Json(ApiResponse::<()>::error(format!(
+                "Simulation not found: {}",
+                id
+            ))),
+        )
+            .into_response(),
         Err(e) => {
             error!("Failed to delete simulation: {}", e);
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ApiResponse::<()>::error(format!("Failed to delete simulation: {}", e))),
-            ).into_response()
+                Json(ApiResponse::<()>::error(format!(
+                    "Failed to delete simulation: {}",
+                    e
+                ))),
+            )
+                .into_response()
         }
     }
 }
@@ -567,20 +619,31 @@ async fn start_simulation(
     Path(id): Path<String>,
 ) -> impl IntoResponse {
     info!("Starting simulation: {}", id);
-    state.metrics.increment_counter("api.simulations.start", 1, None);
+    state
+        .metrics
+        .increment_counter("api.simulations.start", 1, None);
 
-    match state.db.update_simulation_status(&id, SimulationStatus::Running).await {
+    match state
+        .db
+        .update_simulation_status(&id, SimulationStatus::Running)
+        .await
+    {
         Ok(_) => Json(ApiResponse::success(serde_json::json!({
             "id": id,
             "status": "running",
             "message": "Simulation started successfully"
-        }))).into_response(),
+        })))
+        .into_response(),
         Err(e) => {
             error!("Failed to start simulation: {}", e);
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ApiResponse::<()>::error(format!("Failed to start simulation: {}", e))),
-            ).into_response()
+                Json(ApiResponse::<()>::error(format!(
+                    "Failed to start simulation: {}",
+                    e
+                ))),
+            )
+                .into_response()
         }
     }
 }
@@ -591,20 +654,31 @@ async fn pause_simulation(
     Path(id): Path<String>,
 ) -> impl IntoResponse {
     info!("Pausing simulation: {}", id);
-    state.metrics.increment_counter("api.simulations.pause", 1, None);
+    state
+        .metrics
+        .increment_counter("api.simulations.pause", 1, None);
 
-    match state.db.update_simulation_status(&id, SimulationStatus::Paused).await {
+    match state
+        .db
+        .update_simulation_status(&id, SimulationStatus::Paused)
+        .await
+    {
         Ok(_) => Json(ApiResponse::success(serde_json::json!({
             "id": id,
             "status": "paused",
             "message": "Simulation paused successfully"
-        }))).into_response(),
+        })))
+        .into_response(),
         Err(e) => {
             error!("Failed to pause simulation: {}", e);
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ApiResponse::<()>::error(format!("Failed to pause simulation: {}", e))),
-            ).into_response()
+                Json(ApiResponse::<()>::error(format!(
+                    "Failed to pause simulation: {}",
+                    e
+                ))),
+            )
+                .into_response()
         }
     }
 }
@@ -615,20 +689,31 @@ async fn stop_simulation(
     Path(id): Path<String>,
 ) -> impl IntoResponse {
     info!("Stopping simulation: {}", id);
-    state.metrics.increment_counter("api.simulations.stop", 1, None);
+    state
+        .metrics
+        .increment_counter("api.simulations.stop", 1, None);
 
-    match state.db.update_simulation_status(&id, SimulationStatus::Stopped).await {
+    match state
+        .db
+        .update_simulation_status(&id, SimulationStatus::Stopped)
+        .await
+    {
         Ok(_) => Json(ApiResponse::success(serde_json::json!({
             "id": id,
             "status": "stopped",
             "message": "Simulation stopped successfully"
-        }))).into_response(),
+        })))
+        .into_response(),
         Err(e) => {
             error!("Failed to stop simulation: {}", e);
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ApiResponse::<()>::error(format!("Failed to stop simulation: {}", e))),
-            ).into_response()
+                Json(ApiResponse::<()>::error(format!(
+                    "Failed to stop simulation: {}",
+                    e
+                ))),
+            )
+                .into_response()
         }
     }
 }
@@ -639,35 +724,50 @@ async fn step_simulation(
     Path(id): Path<String>,
 ) -> impl IntoResponse {
     info!("Stepping simulation: {}", id);
-    state.metrics.increment_counter("api.simulations.step", 1, None);
+    state
+        .metrics
+        .increment_counter("api.simulations.step", 1, None);
 
     // Get current metrics and increment step
     match state.db.get_simulation(&id).await {
         Ok(Some(mut simulation)) => {
             simulation.metrics.current_step += 1;
             simulation.updated_at = chrono::Utc::now().to_rfc3339();
-            
+
             if let Err(e) = state.db.update_simulation(&simulation).await {
                 return (
                     StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(ApiResponse::<()>::error(format!("Failed to update simulation: {}", e))),
-                ).into_response();
+                    Json(ApiResponse::<()>::error(format!(
+                        "Failed to update simulation: {}",
+                        e
+                    ))),
+                )
+                    .into_response();
             }
-            
+
             Json(ApiResponse::success(serde_json::json!({
                 "id": id,
                 "step": simulation.metrics.current_step,
                 "message": "Step executed successfully"
-            }))).into_response()
+            })))
+            .into_response()
         }
         Ok(None) => (
             StatusCode::NOT_FOUND,
-            Json(ApiResponse::<()>::error(format!("Simulation not found: {}", id))),
-        ).into_response(),
+            Json(ApiResponse::<()>::error(format!(
+                "Simulation not found: {}",
+                id
+            ))),
+        )
+            .into_response(),
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ApiResponse::<()>::error(format!("Failed to get simulation: {}", e))),
-        ).into_response(),
+            Json(ApiResponse::<()>::error(format!(
+                "Failed to get simulation: {}",
+                e
+            ))),
+        )
+            .into_response(),
     }
 }
 
@@ -677,18 +777,28 @@ async fn get_simulation_metrics(
     Path(id): Path<String>,
 ) -> impl IntoResponse {
     info!("Getting metrics for simulation: {}", id);
-    state.metrics.increment_counter("api.simulations.metrics", 1, None);
+    state
+        .metrics
+        .increment_counter("api.simulations.metrics", 1, None);
 
     match state.db.get_simulation(&id).await {
         Ok(Some(simulation)) => Json(ApiResponse::success(simulation.metrics)).into_response(),
         Ok(None) => (
             StatusCode::NOT_FOUND,
-            Json(ApiResponse::<()>::error(format!("Simulation not found: {}", id))),
-        ).into_response(),
+            Json(ApiResponse::<()>::error(format!(
+                "Simulation not found: {}",
+                id
+            ))),
+        )
+            .into_response(),
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ApiResponse::<()>::error(format!("Failed to get simulation: {}", e))),
-        ).into_response(),
+            Json(ApiResponse::<()>::error(format!(
+                "Failed to get simulation: {}",
+                e
+            ))),
+        )
+            .into_response(),
     }
 }
 
@@ -705,11 +815,19 @@ async fn list_agents(
     info!("Listing agents for simulation: {}", simulation_id);
     state.metrics.increment_counter("api.agents.list", 1, None);
 
-    match state.db.list_agents(&simulation_id, params.pagination.per_page() as usize, params.pagination.offset()).await {
+    match state
+        .db
+        .list_agents(
+            &simulation_id,
+            params.pagination.per_page() as usize,
+            params.pagination.offset(),
+        )
+        .await
+    {
         Ok(agents) => {
             let total = state.db.count_agents(&simulation_id).await.unwrap_or(0);
             let total_pages = (total as f64 / params.pagination.per_page() as f64).ceil() as u32;
-            
+
             Json(ApiResponse::success(PaginatedResponse {
                 data: agents,
                 pagination: PaginationInfo {
@@ -718,14 +836,19 @@ async fn list_agents(
                     total,
                     total_pages,
                 },
-            })).into_response()
+            }))
+            .into_response()
         }
         Err(e) => {
             error!("Failed to list agents: {}", e);
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ApiResponse::<()>::error(format!("Failed to list agents: {}", e))),
-            ).into_response()
+                Json(ApiResponse::<()>::error(format!(
+                    "Failed to list agents: {}",
+                    e
+                ))),
+            )
+                .into_response()
         }
     }
 }
@@ -735,21 +858,32 @@ async fn get_agent(
     State(state): State<Arc<AppState>>,
     Path((simulation_id, agent_id)): Path<(String, String)>,
 ) -> impl IntoResponse {
-    info!("Getting agent {} from simulation {}", agent_id, simulation_id);
+    info!(
+        "Getting agent {} from simulation {}",
+        agent_id, simulation_id
+    );
     state.metrics.increment_counter("api.agents.get", 1, None);
 
     match state.db.get_agent(&simulation_id, &agent_id).await {
         Ok(Some(agent)) => Json(ApiResponse::success(agent)).into_response(),
         Ok(None) => (
             StatusCode::NOT_FOUND,
-            Json(ApiResponse::<()>::error(format!("Agent not found: {}", agent_id))),
-        ).into_response(),
+            Json(ApiResponse::<()>::error(format!(
+                "Agent not found: {}",
+                agent_id
+            ))),
+        )
+            .into_response(),
         Err(e) => {
             error!("Failed to get agent: {}", e);
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ApiResponse::<()>::error(format!("Failed to get agent: {}", e))),
-            ).into_response()
+                Json(ApiResponse::<()>::error(format!(
+                    "Failed to get agent: {}",
+                    e
+                ))),
+            )
+                .into_response()
         }
     }
 }
@@ -761,7 +895,9 @@ async fn create_agent(
     Json(request): Json<CreateAgentRequest>,
 ) -> impl IntoResponse {
     info!("Creating agent in simulation: {}", simulation_id);
-    state.metrics.increment_counter("api.agents.create", 1, None);
+    state
+        .metrics
+        .increment_counter("api.agents.create", 1, None);
 
     let agent = Agent {
         id: Uuid::new_v4().to_string(),
@@ -773,16 +909,17 @@ async fn create_agent(
     };
 
     match state.db.create_agent(&agent).await {
-        Ok(_) => (
-            StatusCode::CREATED,
-            Json(ApiResponse::success(agent)),
-        ).into_response(),
+        Ok(_) => (StatusCode::CREATED, Json(ApiResponse::success(agent))).into_response(),
         Err(e) => {
             error!("Failed to create agent: {}", e);
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ApiResponse::<()>::error(format!("Failed to create agent: {}", e))),
-            ).into_response()
+                Json(ApiResponse::<()>::error(format!(
+                    "Failed to create agent: {}",
+                    e
+                ))),
+            )
+                .into_response()
         }
     }
 }
@@ -792,21 +929,34 @@ async fn delete_agent(
     State(state): State<Arc<AppState>>,
     Path((simulation_id, agent_id)): Path<(String, String)>,
 ) -> impl IntoResponse {
-    info!("Deleting agent {} from simulation {}", agent_id, simulation_id);
-    state.metrics.increment_counter("api.agents.delete", 1, None);
+    info!(
+        "Deleting agent {} from simulation {}",
+        agent_id, simulation_id
+    );
+    state
+        .metrics
+        .increment_counter("api.agents.delete", 1, None);
 
     match state.db.delete_agent(&simulation_id, &agent_id).await {
         Ok(true) => (StatusCode::NO_CONTENT, Json(ApiResponse::success(()))).into_response(),
         Ok(false) => (
             StatusCode::NOT_FOUND,
-            Json(ApiResponse::<()>::error(format!("Agent not found: {}", agent_id))),
-        ).into_response(),
+            Json(ApiResponse::<()>::error(format!(
+                "Agent not found: {}",
+                agent_id
+            ))),
+        )
+            .into_response(),
         Err(e) => {
             error!("Failed to delete agent: {}", e);
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ApiResponse::<()>::error(format!("Failed to delete agent: {}", e))),
-            ).into_response()
+                Json(ApiResponse::<()>::error(format!(
+                    "Failed to delete agent: {}",
+                    e
+                ))),
+            )
+                .into_response()
         }
     }
 }
@@ -827,14 +977,22 @@ async fn get_space(
         Ok(Some(space)) => Json(ApiResponse::success(space)).into_response(),
         Ok(None) => (
             StatusCode::NOT_FOUND,
-            Json(ApiResponse::<()>::error(format!("Space not found for simulation: {}", simulation_id))),
-        ).into_response(),
+            Json(ApiResponse::<()>::error(format!(
+                "Space not found for simulation: {}",
+                simulation_id
+            ))),
+        )
+            .into_response(),
         Err(e) => {
             error!("Failed to get space: {}", e);
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ApiResponse::<()>::error(format!("Failed to get space: {}", e))),
-            ).into_response()
+                Json(ApiResponse::<()>::error(format!(
+                    "Failed to get space: {}",
+                    e
+                ))),
+            )
+                .into_response()
         }
     }
 }
@@ -870,8 +1028,12 @@ async fn query_space(
             error!("Failed to query space: {}", e);
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ApiResponse::<()>::error(format!("Failed to query space: {}", e))),
-            ).into_response()
+                Json(ApiResponse::<()>::error(format!(
+                    "Failed to query space: {}",
+                    e
+                ))),
+            )
+                .into_response()
         }
     }
 }
@@ -881,9 +1043,7 @@ async fn query_space(
 // ============================================================================
 
 /// Get system metrics
-async fn get_metrics(
-    State(state): State<Arc<AppState>>,
-) -> impl IntoResponse {
+async fn get_metrics(State(state): State<Arc<AppState>>) -> impl IntoResponse {
     info!("Getting system metrics");
     state.metrics.render()
 }

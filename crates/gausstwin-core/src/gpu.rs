@@ -10,10 +10,10 @@
 //! - Automatic fallback to CPU when GPU unavailable
 //! - Memory-efficient buffer management
 
-use std::sync::Arc;
-use std::collections::HashMap;
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::sync::Arc;
 
 use crate::agent::AgentId;
 use crate::error::{GaussTwinError, Result};
@@ -218,9 +218,10 @@ impl GpuAccelerator {
         Self::with_config(GpuConfig {
             max_agents,
             ..Default::default()
-        }).await
+        })
+        .await
     }
-    
+
     /// Create a new GPU accelerator with custom configuration
     pub async fn with_config(config: GpuConfig) -> Result<Self> {
         let mut accelerator = Self {
@@ -232,22 +233,22 @@ impl GpuAccelerator {
             buffers: HashMap::new(),
             pipeline_cache: HashMap::new(),
         };
-        
+
         // Try to initialize GPU
         if let Err(e) = accelerator.initialize_gpu().await {
             tracing::warn!("GPU initialization failed: {}. Falling back to CPU.", e);
             accelerator.gpu_available = false;
         }
-        
+
         Ok(accelerator)
     }
-    
+
     /// Initialize GPU resources
     async fn initialize_gpu(&mut self) -> Result<()> {
         #[cfg(feature = "gpu")]
         {
             use wgpu::*;
-            
+
             // Request adapter
             let instance = Instance::new(InstanceDescriptor {
                 backends: match self.config.preferred_backend {
@@ -260,7 +261,7 @@ impl GpuAccelerator {
                 },
                 ..Default::default()
             });
-            
+
             let adapter = instance
                 .request_adapter(&RequestAdapterOptions {
                     power_preference: PowerPreference::HighPerformance,
@@ -268,10 +269,12 @@ impl GpuAccelerator {
                     force_fallback_adapter: false,
                 })
                 .await
-                .ok_or_else(|| GaussTwinError::NotSupported("No suitable GPU adapter found".to_string()))?;
-            
+                .ok_or_else(|| {
+                    GaussTwinError::NotSupported("No suitable GPU adapter found".to_string())
+                })?;
+
             let info = adapter.get_info();
-            
+
             self.capabilities = Some(GpuCapabilities {
                 device_name: info.name.clone(),
                 vendor: format!("{:?}", info.vendor),
@@ -283,21 +286,21 @@ impl GpuAccelerator {
                     _ => GpuDeviceType::Unknown,
                 },
                 max_workgroup_size: [256, 256, 64], // Common default
-                max_buffer_size: 1 << 30, // 1 GB default
+                max_buffer_size: 1 << 30,           // 1 GB default
                 max_bind_groups: 4,
                 timestamp_query: adapter.features().contains(Features::TIMESTAMP_QUERY),
                 estimated_tflops: 0.0, // Would need benchmarking to determine
             });
-            
+
             self.gpu_available = true;
-            
+
             tracing::info!(
                 "GPU initialized: {} ({:?})",
                 info.name,
                 self.capabilities.as_ref().unwrap().device_type
             );
         }
-        
+
         #[cfg(not(feature = "gpu"))]
         {
             self.capabilities = Some(GpuCapabilities {
@@ -312,30 +315,30 @@ impl GpuAccelerator {
             });
             self.gpu_available = false;
         }
-        
+
         Ok(())
     }
-    
+
     /// Check if GPU is available
     pub fn is_gpu_available(&self) -> bool {
         self.gpu_available
     }
-    
+
     /// Get GPU capabilities
     pub fn capabilities(&self) -> Option<&GpuCapabilities> {
         self.capabilities.as_ref()
     }
-    
+
     /// Get memory statistics
     pub fn memory_stats(&self) -> GpuMemoryStats {
         self.memory_stats.read().clone()
     }
-    
+
     /// Get execution statistics
     pub fn execution_stats(&self) -> GpuExecutionStats {
         self.execution_stats.read().clone()
     }
-    
+
     /// Process agents on GPU (positions update)
     ///
     /// Performs parallel agent position updates using compute shaders.
@@ -352,27 +355,27 @@ impl GpuAccelerator {
                 positions.len(),
             ));
         }
-        
+
         if !self.gpu_available || agent_ids.len() < 1000 {
             // Fall back to CPU for small batches or when GPU unavailable
             self.process_agents_cpu(positions, velocities, dt);
             return Ok(());
         }
-        
+
         // GPU processing would go here
         // For now, use optimized CPU implementation
         self.process_agents_cpu(positions, velocities, dt);
-        
+
         // Update stats
         {
             let mut stats = self.execution_stats.write();
             stats.dispatch_count += 1;
             stats.agents_processed += agent_ids.len() as u64;
         }
-        
+
         Ok(())
     }
-    
+
     /// CPU fallback for agent processing with SIMD optimization
     fn process_agents_cpu(
         &self,
@@ -382,7 +385,7 @@ impl GpuAccelerator {
     ) {
         // Process in chunks for better cache utilization
         const CHUNK_SIZE: usize = 64;
-        
+
         positions
             .chunks_mut(CHUNK_SIZE)
             .zip(velocities.chunks(CHUNK_SIZE))
@@ -394,7 +397,7 @@ impl GpuAccelerator {
                 }
             });
     }
-    
+
     /// Perform K-nearest neighbor search on GPU
     pub async fn knn_search(
         &self,
@@ -405,16 +408,16 @@ impl GpuAccelerator {
         if query_points.is_empty() || data_points.is_empty() {
             return Ok(vec![Vec::new(); query_points.len()]);
         }
-        
+
         if !self.gpu_available || data_points.len() < 10000 {
             // CPU fallback for small datasets
             return self.knn_search_cpu(query_points, data_points, k);
         }
-        
+
         // GPU KNN would be implemented here
         self.knn_search_cpu(query_points, data_points, k)
     }
-    
+
     /// CPU fallback for KNN search with optimization
     fn knn_search_cpu(
         &self,
@@ -423,7 +426,7 @@ impl GpuAccelerator {
         k: usize,
     ) -> Result<Vec<Vec<(usize, f32)>>> {
         let k = k.min(data_points.len());
-        
+
         let results: Vec<Vec<(usize, f32)>> = query_points
             .iter()
             .map(|query| {
@@ -439,20 +442,20 @@ impl GpuAccelerator {
                         (i, dist_sq)
                     })
                     .collect();
-                
+
                 // Partial sort to get k nearest
                 distances.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
                 distances.truncate(k);
-                
+
                 // Convert to actual distances
                 distances.iter_mut().for_each(|(_, d)| *d = d.sqrt());
                 distances
             })
             .collect();
-        
+
         Ok(results)
     }
-    
+
     /// Perform radius search on GPU
     pub async fn radius_search(
         &self,
@@ -463,9 +466,9 @@ impl GpuAccelerator {
         if data_points.is_empty() {
             return Ok(Vec::new());
         }
-        
+
         let radius_sq = radius * radius;
-        
+
         let results: Vec<(usize, f32)> = data_points
             .iter()
             .enumerate()
@@ -474,7 +477,7 @@ impl GpuAccelerator {
                 let dy = query_point.1 - point.1;
                 let dz = query_point.2 - point.2;
                 let dist_sq = dx * dx + dy * dy + dz * dz;
-                
+
                 if dist_sq <= radius_sq {
                     Some((i, dist_sq.sqrt()))
                 } else {
@@ -482,10 +485,10 @@ impl GpuAccelerator {
                 }
             })
             .collect();
-        
+
         Ok(results)
     }
-    
+
     /// Build spatial hash grid on GPU
     pub async fn build_spatial_grid(
         &self,
@@ -493,19 +496,19 @@ impl GpuAccelerator {
         cell_size: f32,
     ) -> Result<SpatialGrid> {
         let mut grid = SpatialGrid::new(cell_size);
-        
+
         for (i, pos) in positions.iter().enumerate() {
             grid.insert(i, *pos);
         }
-        
+
         Ok(grid)
     }
-    
+
     /// Release GPU resources
     pub fn release_resources(&mut self) {
         self.buffers.clear();
         self.pipeline_cache.clear();
-        
+
         let mut stats = self.memory_stats.write();
         stats.in_use = 0;
     }
@@ -531,7 +534,7 @@ impl SpatialGrid {
             item_count: 0,
         }
     }
-    
+
     /// Get cell coordinates for a position
     fn get_cell(&self, pos: (f32, f32, f32)) -> (i32, i32, i32) {
         (
@@ -540,21 +543,21 @@ impl SpatialGrid {
             (pos.2 / self.cell_size).floor() as i32,
         )
     }
-    
+
     /// Insert an item at a position
     pub fn insert(&mut self, index: usize, pos: (f32, f32, f32)) {
         let cell = self.get_cell(pos);
         self.cells.entry(cell).or_insert_with(Vec::new).push(index);
         self.item_count += 1;
     }
-    
+
     /// Query neighbors within a radius
     pub fn query_radius(&self, pos: (f32, f32, f32), radius: f32) -> Vec<usize> {
         let cell = self.get_cell(pos);
         let cells_to_check = (radius / self.cell_size).ceil() as i32;
-        
+
         let mut results = Vec::new();
-        
+
         for dx in -cells_to_check..=cells_to_check {
             for dy in -cells_to_check..=cells_to_check {
                 for dz in -cells_to_check..=cells_to_check {
@@ -565,21 +568,21 @@ impl SpatialGrid {
                 }
             }
         }
-        
+
         results
     }
-    
+
     /// Clear the grid
     pub fn clear(&mut self) {
         self.cells.clear();
         self.item_count = 0;
     }
-    
+
     /// Get cell count
     pub fn cell_count(&self) -> usize {
         self.cells.len()
     }
-    
+
     /// Get item count
     pub fn item_count(&self) -> usize {
         self.item_count
@@ -601,7 +604,7 @@ impl GpuSpatialEngine {
             spatial_grid: None,
         })
     }
-    
+
     /// Build spatial index
     pub async fn build_index(
         &mut self,
@@ -609,11 +612,13 @@ impl GpuSpatialEngine {
         cell_size: f32,
     ) -> Result<()> {
         self.spatial_grid = Some(
-            self.accelerator.build_spatial_grid(positions, cell_size).await?
+            self.accelerator
+                .build_spatial_grid(positions, cell_size)
+                .await?,
         );
         Ok(())
     }
-    
+
     /// Perform KNN search
     pub async fn knn_search(
         &self,
@@ -621,9 +626,11 @@ impl GpuSpatialEngine {
         data_points: &[(f32, f32, f32)],
         k: usize,
     ) -> Result<Vec<Vec<(usize, f32)>>> {
-        self.accelerator.knn_search(query_points, data_points, k).await
+        self.accelerator
+            .knn_search(query_points, data_points, k)
+            .await
     }
-    
+
     /// Perform radius search
     pub async fn radius_search(
         &self,
@@ -631,9 +638,11 @@ impl GpuSpatialEngine {
         data_points: &[(f32, f32, f32)],
         radius: f32,
     ) -> Result<Vec<(usize, f32)>> {
-        self.accelerator.radius_search(query_point, data_points, radius).await
+        self.accelerator
+            .radius_search(query_point, data_points, radius)
+            .await
     }
-    
+
     /// Get accelerator reference
     pub fn accelerator(&self) -> &GpuAccelerator {
         &self.accelerator
@@ -643,84 +652,76 @@ impl GpuSpatialEngine {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[tokio::test]
     async fn test_gpu_accelerator_creation() {
         let accelerator = GpuAccelerator::new(10000).await.unwrap();
         // Should work even without GPU (falls back to CPU)
         assert!(accelerator.capabilities().is_some());
     }
-    
+
     #[tokio::test]
     async fn test_agent_processing() {
         let accelerator = GpuAccelerator::new(1000).await.unwrap();
-        
+
         let agent_ids: Vec<AgentId> = (0..100).map(|_| AgentId::new()).collect();
-        let mut positions: Vec<(f32, f32, f32)> = (0..100)
-            .map(|i| (i as f32, 0.0, 0.0))
-            .collect();
-        let velocities: Vec<(f32, f32, f32)> = (0..100)
-            .map(|_| (1.0, 0.0, 0.0))
-            .collect();
-        
+        let mut positions: Vec<(f32, f32, f32)> = (0..100).map(|i| (i as f32, 0.0, 0.0)).collect();
+        let velocities: Vec<(f32, f32, f32)> = (0..100).map(|_| (1.0, 0.0, 0.0)).collect();
+
         accelerator
             .process_agents(&agent_ids, &mut positions, &velocities, 0.1)
             .await
             .unwrap();
-        
+
         // Check that positions were updated
         assert!((positions[0].0 - 0.1).abs() < 0.0001);
         assert!((positions[50].0 - 50.1).abs() < 0.0001);
     }
-    
+
     #[tokio::test]
     async fn test_knn_search() {
         let accelerator = GpuAccelerator::new(1000).await.unwrap();
-        
-        let data_points: Vec<(f32, f32, f32)> = (0..100)
-            .map(|i| (i as f32, 0.0, 0.0))
-            .collect();
+
+        let data_points: Vec<(f32, f32, f32)> = (0..100).map(|i| (i as f32, 0.0, 0.0)).collect();
         let query_points = vec![(5.5, 0.0, 0.0)];
-        
+
         let results = accelerator
             .knn_search(&query_points, &data_points, 3)
             .await
             .unwrap();
-        
+
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].len(), 3);
-        
+
         // Nearest should be index 5 or 6
         assert!(results[0][0].0 == 5 || results[0][0].0 == 6);
     }
-    
+
     #[tokio::test]
     async fn test_radius_search() {
         let accelerator = GpuAccelerator::new(1000).await.unwrap();
-        
-        let data_points: Vec<(f32, f32, f32)> = (0..100)
-            .map(|i| (i as f32, 0.0, 0.0))
-            .collect();
-        
+
+        let data_points: Vec<(f32, f32, f32)> = (0..100).map(|i| (i as f32, 0.0, 0.0)).collect();
+
         let results = accelerator
             .radius_search((10.0, 0.0, 0.0), &data_points, 2.5)
             .await
             .unwrap();
-        
+
         // Should find points at 8, 9, 10, 11, 12
         assert_eq!(results.len(), 5);
     }
-    
+
     #[test]
     fn test_spatial_grid() {
         let mut grid = SpatialGrid::new(1.0);
-        
+
         grid.insert(0, (0.5, 0.5, 0.5));
         grid.insert(1, (1.5, 0.5, 0.5));
         grid.insert(2, (5.5, 5.5, 5.5));
-        
+
         assert_eq!(grid.item_count(), 3);
-        
+
         let neighbors = grid.query_radius((0.5, 0.5, 0.5), 2.0);
         assert!(neighbors.contains(&0));
         assert!(neighbors.contains(&1));

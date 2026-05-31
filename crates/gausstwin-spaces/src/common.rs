@@ -1,7 +1,9 @@
 use crossbeam_queue::SegQueue;
 use dashmap::DashMap;
-use parking_lot::{RwLock, Mutex};
+use parking_lot::{Mutex, RwLock};
 use rayon::prelude::*;
+#[cfg(feature = "simd")]
+use std::simd::f64x4;
 use std::{
     cell::RefCell,
     sync::{
@@ -11,13 +13,11 @@ use std::{
     thread_local,
     time::{Duration, Instant},
 };
-#[cfg(feature = "simd")]
-use std::simd::f64x4;
 
 #[cfg(not(feature = "simd"))]
 /// SIMD stub module for fallback when SIMD features are not available
 pub mod simd_stub {
-    use std::ops::{Add, Sub, Mul, Index};
+    use std::ops::{Add, Index, Mul, Sub};
 
     /// Simple fallback 4-wide vector used when nightly portable-SIMD is not available.
     /// Implements just enough functionality for the algorithms in this crate to compile
@@ -152,7 +152,7 @@ impl DistanceMetric {
             Self::Custom(f) => f(dx, dy, dz),
         }
     }
-    
+
     /// SIMD-accelerated distance calculation
     #[cfg(feature = "simd")]
     pub unsafe fn calculate_simd(&self, dx: f64x4, dy: f64x4, dz: f64x4) -> f64x4 {
@@ -215,18 +215,18 @@ impl PoolStats {
             }
         }
     }
-    
+
     /// Record a memory deallocation
     pub fn record_deallocation(&self, size: usize) {
         self.deallocations.fetch_add(1, Ordering::Relaxed);
         self.current_memory.fetch_sub(size, Ordering::Relaxed);
     }
-    
+
     /// Record a cache hit
     pub fn record_cache_hit(&self) {
         self.cache_hits.fetch_add(1, Ordering::Relaxed);
     }
-    
+
     /// Record a cache miss
     pub fn record_cache_miss(&self) {
         self.cache_misses.fetch_add(1, Ordering::Relaxed);
@@ -247,7 +247,7 @@ impl<T> Chunk<T> {
             used: AtomicUsize::new(0),
         }
     }
-    
+
     fn try_allocate(&self) -> Option<usize> {
         let current = self.used.load(Ordering::Relaxed);
         if current >= self.data.capacity() {
@@ -278,14 +278,14 @@ impl<T> ChunkAllocator<T> {
             chunk_size,
         }
     }
-    
+
     fn allocate(&mut self) -> Option<Arc<Chunk<T>>> {
         if let Some(chunk) = &self.current_chunk {
             if chunk.try_allocate().is_some() {
                 return Some(Arc::clone(chunk));
             }
         }
-        
+
         // Create new chunk
         let new_chunk = Arc::new(Chunk::new(self.chunk_size));
         self.current_chunk = Some(Arc::clone(&new_chunk));
@@ -313,7 +313,7 @@ impl<T> HighPerformanceMemoryPool<T> {
             stats: Arc::new(PoolStats::default()),
         }
     }
-    
+
     pub fn allocate(&self) -> Option<T> {
         // Try free list first
         if let Some(ptr) = self.free_list.pop() {
@@ -322,9 +322,9 @@ impl<T> HighPerformanceMemoryPool<T> {
                 return Some(ptr.read());
             }
         }
-        
+
         self.stats.record_cache_miss();
-        
+
         ALLOCATOR.with(|alloc_cell| {
             // SAFETY: casting between generic types for demonstration; replace with type-safe allocator as needed
             let mut _alloc = alloc_cell.borrow_mut();
@@ -335,13 +335,13 @@ impl<T> HighPerformanceMemoryPool<T> {
             }
         })
     }
-    
+
     pub fn deallocate(&self, value: T) {
         let ptr = Box::into_raw(Box::new(value));
         self.free_list.push(ptr);
         self.stats.record_deallocation(std::mem::size_of::<T>());
     }
-    
+
     pub fn get_stats(&self) -> Arc<PoolStats> {
         Arc::clone(&self.stats)
     }
@@ -360,7 +360,7 @@ impl<K: Eq + std::hash::Hash, V: Clone> SpatialCache<K, V> {
             ttl,
         }
     }
-    
+
     pub fn get(&self, key: &K) -> Option<V> {
         if let Some(entry) = self.data.get(key) {
             let (value, timestamp) = entry.value();
@@ -372,15 +372,15 @@ impl<K: Eq + std::hash::Hash, V: Clone> SpatialCache<K, V> {
         }
         None
     }
-    
+
     pub fn insert(&self, key: K, value: V) {
         self.data.insert(key, (value, Instant::now()));
     }
-    
+
     pub fn remove(&self, key: &K) {
         self.data.remove(key);
     }
-    
+
     pub fn clear(&self) {
         self.data.clear();
     }
@@ -443,48 +443,48 @@ pub struct CacheAligned<T>(pub T);
 mod tests {
     use super::*;
     use std::f64::consts::PI;
-    
+
     #[test]
     fn test_distance_metrics() {
         let dx = 3.0;
         let dy = 4.0;
         let dz = 0.0;
-        
+
         assert_eq!(DistanceMetric::Euclidean.calculate(dx, dy, dz), 5.0);
         assert_eq!(DistanceMetric::Manhattan.calculate(dx, dy, dz), 7.0);
         assert_eq!(DistanceMetric::Chebyshev.calculate(dx, dy, dz), 4.0);
-        
+
         let custom = DistanceMetric::Custom(|x, y, z| (x + y + z) / 3.0);
         assert_eq!(custom.calculate(dx, dy, dz), (dx + dy + dz) / 3.0);
     }
-    
+
     #[cfg(feature = "simd")]
     #[test]
     fn test_simd_distance_calculation() {
         let dx = f64x4::from_array([3.0, 1.0, 2.0, 4.0]);
         let dy = f64x4::from_array([4.0, 1.0, 2.0, 3.0]);
         let dz = f64x4::from_array([0.0, 1.0, 1.0, 2.0]);
-        
+
         unsafe {
             let euclidean = DistanceMetric::Euclidean.calculate_simd(dx, dy, dz);
             let manhattan = DistanceMetric::Manhattan.calculate_simd(dx, dy, dz);
             let chebyshev = DistanceMetric::Chebyshev.calculate_simd(dx, dy, dz);
-            
+
             let euclidean_arr = euclidean.to_array();
             assert!((euclidean_arr[0] - 5.0).abs() < 1e-10);
-            
+
             let manhattan_arr = manhattan.to_array();
             assert_eq!(manhattan_arr[0], 7.0);
-            
+
             let chebyshev_arr = chebyshev.to_array();
             assert_eq!(chebyshev_arr[0], 4.0);
         }
     }
-    
+
     #[test]
     fn test_memory_pool() {
         let pool = HighPerformanceMemoryPool::<Vec<i32>>::new(1000);
-        
+
         // Allocate and deallocate
         let mut values = Vec::new();
         for i in 0..100 {
@@ -492,18 +492,18 @@ mod tests {
             vec.push(i);
             values.push(vec);
         }
-        
+
         for value in values {
             pool.deallocate(value);
         }
-        
+
         // Check stats
         let stats = pool.get_stats();
         assert!(stats.allocations.load(Ordering::Relaxed) > 0);
         assert!(stats.deallocations.load(Ordering::Relaxed) > 0);
         assert_eq!(stats.current_memory.load(Ordering::Relaxed), 0);
     }
-    
+
     // TODO(phase1-test-debt): this test hangs (SpatialCache operation blocks
     // indefinitely — likely a lock/TTL-eviction deadlock). Ignored to keep the
     // suite runnable; tracked as a runtime bug alongside the cosim deadlock.
@@ -511,18 +511,18 @@ mod tests {
     #[test]
     fn test_spatial_cache() {
         let cache = SpatialCache::new(Duration::from_secs(1));
-        
+
         // Insert and retrieve
         cache.insert("key1", vec![1, 2, 3]);
         assert_eq!(cache.get(&"key1"), Some(vec![1, 2, 3]));
-        
+
         // Wait for expiration
         std::thread::sleep(Duration::from_secs(2));
         assert_eq!(cache.get(&"key1"), None);
-        
+
         // Test removal
         cache.insert("key2", vec![4, 5, 6]);
         cache.remove(&"key2");
         assert_eq!(cache.get(&"key2"), None);
     }
-} 
+}

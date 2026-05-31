@@ -1,10 +1,10 @@
 //! Time management for GaussTwin simulations
-//! 
+//!
 //! This module provides time representation, stepping, and scheduling utilities.
 
 use serde::{Deserialize, Serialize};
-use std::ops::{Add, Sub, Mul, Div};
 use std::fmt;
+use std::ops::{Add, Div, Mul, Sub};
 
 /// Simulation time type (can be integer or floating-point based on configuration)
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Serialize, Deserialize)]
@@ -15,47 +15,47 @@ impl SimTime {
     pub fn new(time: f64) -> Self {
         SimTime(time)
     }
-    
+
     /// Get the raw time value
     pub fn value(&self) -> f64 {
         self.0
     }
-    
+
     /// Zero time
     pub fn zero() -> Self {
         SimTime(0.0)
     }
-    
+
     /// Check if this is zero time
     pub fn is_zero(&self) -> bool {
         self.0 == 0.0
     }
-    
+
     /// Maximum representable time
     pub fn max() -> Self {
         SimTime(f64::MAX)
     }
-    
+
     /// Check if this is the maximum time
     pub fn is_max(&self) -> bool {
         self.0 == f64::MAX
     }
-    
+
     /// Add a duration to this time
     pub fn add_duration(&self, duration: Duration) -> Self {
         SimTime(self.0 + duration.0)
     }
-    
+
     /// Subtract a duration from this time
     pub fn sub_duration(&self, duration: Duration) -> Self {
         SimTime(self.0 - duration.0)
     }
-    
+
     /// Calculate duration between two times
     pub fn duration_since(&self, earlier: SimTime) -> Duration {
         Duration(self.0 - earlier.0)
     }
-    
+
     /// Calculate duration until another time
     pub fn duration_until(&self, later: SimTime) -> Duration {
         Duration(later.0 - self.0)
@@ -88,7 +88,7 @@ impl From<SimTime> for f64 {
 
 impl Add<Duration> for SimTime {
     type Output = SimTime;
-    
+
     fn add(self, rhs: Duration) -> Self::Output {
         self.add_duration(rhs)
     }
@@ -96,7 +96,7 @@ impl Add<Duration> for SimTime {
 
 impl Sub<Duration> for SimTime {
     type Output = SimTime;
-    
+
     fn sub(self, rhs: Duration) -> Self::Output {
         self.sub_duration(rhs)
     }
@@ -104,7 +104,7 @@ impl Sub<Duration> for SimTime {
 
 impl Sub<SimTime> for SimTime {
     type Output = Duration;
-    
+
     fn sub(self, rhs: SimTime) -> Self::Output {
         self.duration_since(rhs)
     }
@@ -119,62 +119,62 @@ impl Duration {
     pub fn new(duration: f64) -> Self {
         Duration(duration)
     }
-    
+
     /// Get the raw duration value
     pub fn value(&self) -> f64 {
         self.0
     }
-    
+
     /// Zero duration
     pub fn zero() -> Self {
         Duration(0.0)
     }
-    
+
     /// Check if this is zero duration
     pub fn is_zero(&self) -> bool {
         self.0 == 0.0
     }
-    
+
     /// Create duration from seconds
     pub fn from_secs(secs: f64) -> Self {
         Duration(secs)
     }
-    
+
     /// Create duration from milliseconds
     pub fn from_millis(millis: f64) -> Self {
         Duration(millis / 1000.0)
     }
-    
+
     /// Create duration from microseconds
     pub fn from_micros(micros: f64) -> Self {
         Duration(micros / 1_000_000.0)
     }
-    
+
     /// Get duration in seconds
     pub fn as_secs(&self) -> f64 {
         self.0
     }
-    
+
     /// Get duration in milliseconds
     pub fn as_millis(&self) -> f64 {
         self.0 * 1000.0
     }
-    
+
     /// Get duration in microseconds
     pub fn as_micros(&self) -> f64 {
         self.0 * 1_000_000.0
     }
-    
+
     /// Get absolute value of duration
     pub fn abs(&self) -> Self {
         Duration(self.0.abs())
     }
-    
+
     /// Check if duration is negative
     pub fn is_negative(&self) -> bool {
         self.0 < 0.0
     }
-    
+
     /// Check if duration is positive
     pub fn is_positive(&self) -> bool {
         self.0 > 0.0
@@ -196,10 +196,13 @@ impl fmt::Display for Duration {
         } else if self.0 < 3600.0 {
             write!(f, "{}m{:.1}s", (self.0 / 60.0) as u32, self.0 % 60.0)
         } else {
-            write!(f, "{}h{}m{:.1}s", 
-                (self.0 / 3600.0) as u32, 
-                ((self.0 % 3600.0) / 60.0) as u32, 
-                self.0 % 60.0)
+            write!(
+                f,
+                "{}h{}m{:.1}s",
+                (self.0 / 3600.0) as u32,
+                ((self.0 % 3600.0) / 60.0) as u32,
+                self.0 % 60.0
+            )
         }
     }
 }
@@ -218,7 +221,7 @@ impl From<Duration> for f64 {
 
 impl Add for Duration {
     type Output = Duration;
-    
+
     fn add(self, rhs: Duration) -> Self::Output {
         Duration(self.0 + rhs.0)
     }
@@ -226,7 +229,7 @@ impl Add for Duration {
 
 impl Sub for Duration {
     type Output = Duration;
-    
+
     fn sub(self, rhs: Duration) -> Self::Output {
         Duration(self.0 - rhs.0)
     }
@@ -234,7 +237,7 @@ impl Sub for Duration {
 
 impl Mul<f64> for Duration {
     type Output = Duration;
-    
+
     fn mul(self, rhs: f64) -> Self::Output {
         Duration(self.0 * rhs)
     }
@@ -242,7 +245,7 @@ impl Mul<f64> for Duration {
 
 impl Div<f64> for Duration {
     type Output = Duration;
-    
+
     fn div(self, rhs: f64) -> Self::Output {
         Duration(self.0 / rhs)
     }
@@ -250,7 +253,7 @@ impl Div<f64> for Duration {
 
 impl Div for Duration {
     type Output = f64;
-    
+
     fn div(self, rhs: Duration) -> Self::Output {
         self.0 / rhs.0
     }
@@ -268,17 +271,17 @@ impl TimeStep {
         }
         Ok(TimeStep(step))
     }
-    
+
     /// Get the step duration
     pub fn duration(&self) -> Duration {
         self.0
     }
-    
+
     /// Fixed time step (most common)
     pub fn fixed(step: f64) -> crate::error::Result<Self> {
         Self::new(Duration::from_secs(step))
     }
-    
+
     /// Variable time step (for adaptive stepping)
     pub fn variable(min_step: f64, max_step: f64) -> VariableTimeStep {
         VariableTimeStep {
@@ -308,17 +311,17 @@ impl VariableTimeStep {
     pub fn current(&self) -> Duration {
         self.current_step
     }
-    
+
     /// Get the minimum step size
     pub fn min(&self) -> Duration {
         self.min_step
     }
-    
+
     /// Get the maximum step size
     pub fn max(&self) -> Duration {
         self.max_step
     }
-    
+
     /// Update the current step size
     pub fn set_current(&mut self, step: Duration) -> crate::error::Result<()> {
         if step < self.min_step || step > self.max_step {
@@ -327,7 +330,7 @@ impl VariableTimeStep {
         self.current_step = step;
         Ok(())
     }
-    
+
     /// Increase step size (up to maximum)
     pub fn increase(&mut self, factor: f64) {
         let new_step = self.current_step * factor;
@@ -337,7 +340,7 @@ impl VariableTimeStep {
             self.current_step = self.max_step;
         }
     }
-    
+
     /// Decrease step size (down to minimum)
     pub fn decrease(&mut self, factor: f64) {
         let new_step = self.current_step / factor;
@@ -361,42 +364,50 @@ impl TimeWindow {
     pub fn new(start: SimTime, end: SimTime) -> crate::error::Result<Self> {
         if start > end {
             return Err(crate::error::GaussTwinError::InvalidTimeStep(
-                (end - start).value()
+                (end - start).value(),
             ));
         }
         Ok(TimeWindow { start, end })
     }
-    
+
     /// Get the start time
     pub fn start(&self) -> SimTime {
         self.start
     }
-    
+
     /// Get the end time
     pub fn end(&self) -> SimTime {
         self.end
     }
-    
+
     /// Get the duration of the window
     pub fn duration(&self) -> Duration {
         self.end - self.start
     }
-    
+
     /// Check if a time is within this window
     pub fn contains(&self, time: SimTime) -> bool {
         time >= self.start && time <= self.end
     }
-    
+
     /// Check if this window overlaps with another
     pub fn overlaps(&self, other: &TimeWindow) -> bool {
         self.start <= other.end && self.end >= other.start
     }
-    
+
     /// Get the intersection with another window
     pub fn intersection(&self, other: &TimeWindow) -> Option<TimeWindow> {
-        let start = if self.start > other.start { self.start } else { other.start };
-        let end = if self.end < other.end { self.end } else { other.end };
-        
+        let start = if self.start > other.start {
+            self.start
+        } else {
+            other.start
+        };
+        let end = if self.end < other.end {
+            self.end
+        } else {
+            other.end
+        };
+
         if start <= end {
             Some(TimeWindow { start, end })
         } else {
@@ -420,23 +431,23 @@ impl Timer {
             end_time: None,
         }
     }
-    
+
     /// Stop the timer
     pub fn stop(&mut self, current_time: SimTime) {
         self.end_time = Some(current_time);
     }
-    
+
     /// Get elapsed time (if timer is stopped) or current elapsed time
     pub fn elapsed(&self, current_time: SimTime) -> Duration {
         let end = self.end_time.unwrap_or(current_time);
         end - self.start_time
     }
-    
+
     /// Check if timer is running
     pub fn is_running(&self) -> bool {
         self.end_time.is_none()
     }
-    
+
     /// Reset the timer
     pub fn reset(&mut self, current_time: SimTime) {
         self.start_time = current_time;
@@ -452,58 +463,58 @@ mod tests {
     fn test_sim_time() {
         let t1 = SimTime::new(1.0);
         let t2 = SimTime::new(2.0);
-        
+
         assert_eq!(t1.value(), 1.0);
         assert!(t1 < t2);
-        
+
         let duration = t2 - t1;
         assert_eq!(duration.value(), 1.0);
     }
-    
+
     #[test]
     fn test_duration() {
         let d1 = Duration::from_secs(1.5);
         let d2 = Duration::from_millis(500.0);
-        
+
         assert_eq!(d1.as_secs(), 1.5);
         assert_eq!(d2.as_secs(), 0.5);
-        
+
         let sum = d1 + d2;
         assert_eq!(sum.as_secs(), 2.0);
     }
-    
+
     #[test]
     fn test_time_step() {
         let step = TimeStep::fixed(0.1).unwrap();
         assert_eq!(step.duration().as_secs(), 0.1);
-        
+
         // Invalid step should fail
         assert!(TimeStep::fixed(0.0).is_err());
         assert!(TimeStep::fixed(-0.1).is_err());
     }
-    
+
     #[test]
     fn test_time_window() {
         let start = SimTime::new(0.0);
         let end = SimTime::new(10.0);
         let window = TimeWindow::new(start, end).unwrap();
-        
+
         assert!(window.contains(SimTime::new(5.0)));
         assert!(!window.contains(SimTime::new(15.0)));
         assert_eq!(window.duration().as_secs(), 10.0);
     }
-    
+
     #[test]
     fn test_timer() {
         let start_time = SimTime::new(0.0);
         let mut timer = Timer::start(start_time);
-        
+
         assert!(timer.is_running());
-        
+
         let current_time = SimTime::new(5.0);
         assert_eq!(timer.elapsed(current_time).as_secs(), 5.0);
-        
+
         timer.stop(current_time);
         assert!(!timer.is_running());
     }
-} 
+}

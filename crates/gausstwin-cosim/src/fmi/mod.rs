@@ -1,20 +1,16 @@
 //! FMI 2.0 Implementation
-//! 
+//!
 //! Provides comprehensive FMI 2.0 support:
 //! - Model Exchange
 //! - Co-Simulation
 //! - Import/Export capabilities
 //! - Variable access and manipulation
 
-pub mod import;
 pub mod export;
+pub mod import;
 pub mod model;
 
-use std::{
-    collections::HashMap,
-    path::PathBuf,
-    sync::Arc,
-};
+use std::{collections::HashMap, path::PathBuf, sync::Arc};
 
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
@@ -22,12 +18,8 @@ use thiserror::Error;
 use tokio::sync::RwLock;
 
 use crate::{
-    common::{
-        data::DataValue,
-        time::SimulationTime,
-    },
-    CosimError,
-    Result,
+    common::{data::DataValue, time::SimulationTime},
+    CosimError, Result,
 };
 
 /// FMI-specific errors
@@ -138,7 +130,7 @@ impl FmiInstance {
     pub async fn new(config: FmiConfig) -> Result<Self> {
         // Load FMU
         let component = FmiComponent::load(&config).await?;
-        
+
         // Initialize variables
         let variables = component.get_variables().await?;
 
@@ -175,9 +167,9 @@ impl FmiInstance {
     /// Get variable value
     pub async fn get_value(&self, name: &str) -> Result<DataValue> {
         let variables = self.variables.read().await;
-        let var = variables.get(name).ok_or_else(|| 
-            CosimError::Runtime(format!("Variable {} not found", name))
-        )?;
+        let var = variables
+            .get(name)
+            .ok_or_else(|| CosimError::Runtime(format!("Variable {} not found", name)))?;
 
         let component = self.instance.read().await;
         component.get_value(var)
@@ -186,9 +178,9 @@ impl FmiInstance {
     /// Set variable value
     pub async fn set_value(&mut self, name: &str, value: DataValue) -> Result<()> {
         let variables = self.variables.read().await;
-        let var = variables.get(name).ok_or_else(|| 
-            CosimError::Runtime(format!("Variable {} not found", name))
-        )?;
+        let var = variables
+            .get(name)
+            .ok_or_else(|| CosimError::Runtime(format!("Variable {} not found", name)))?;
 
         let mut component = self.instance.write().await;
         component.set_value(var, value)
@@ -223,13 +215,13 @@ impl FmiComponent {
         let temp_dir = extract_fmu(&config.fmu_path)?;
 
         // Load DLL
-        let dll_path = temp_dir.join("binaries")
+        let dll_path = temp_dir
+            .join("binaries")
             .join(&config.platform)
             .join(format!("{}.dll", config.model_identifier));
 
         let dll = unsafe {
-            libloading::Library::new(dll_path)
-                .map_err(|e| FmiError::DllLoad(e.to_string()))?
+            libloading::Library::new(dll_path).map_err(|e| FmiError::DllLoad(e.to_string()))?
         };
 
         // Load functions
@@ -248,10 +240,8 @@ impl FmiComponent {
     /// Initialize component
     fn initialize(&mut self, start_time: SimulationTime) -> Result<()> {
         unsafe {
-            let status = (self.functions.initialize)(
-                self.handle,
-                start_time.to_duration().as_secs_f64(),
-            );
+            let status =
+                (self.functions.initialize)(self.handle, start_time.to_duration().as_secs_f64());
             if status != 0 {
                 return Err(FmiError::FunctionCall(format!("error code: {}", status)).into());
             }
@@ -280,14 +270,12 @@ impl FmiComponent {
             match var.value_type {
                 FmiValueType::Real => {
                     let mut value = 0.0;
-                    let status = (self.functions.get_real)(
-                        self.handle,
-                        &var.value_reference,
-                        1,
-                        &mut value,
-                    );
+                    let status =
+                        (self.functions.get_real)(self.handle, &var.value_reference, 1, &mut value);
                     if status != 0 {
-                        return Err(FmiError::FunctionCall(format!("error code: {}", status)).into());
+                        return Err(
+                            FmiError::FunctionCall(format!("error code: {}", status)).into()
+                        );
                     }
                     Ok(DataValue::Real(value))
                 }
@@ -300,7 +288,9 @@ impl FmiComponent {
                         &mut value,
                     );
                     if status != 0 {
-                        return Err(FmiError::FunctionCall(format!("error code: {}", status)).into());
+                        return Err(
+                            FmiError::FunctionCall(format!("error code: {}", status)).into()
+                        );
                     }
                     Ok(DataValue::Integer(value.into()))
                 }
@@ -313,7 +303,9 @@ impl FmiComponent {
                         &mut value,
                     );
                     if status != 0 {
-                        return Err(FmiError::FunctionCall(format!("error code: {}", status)).into());
+                        return Err(
+                            FmiError::FunctionCall(format!("error code: {}", status)).into()
+                        );
                     }
                     Ok(DataValue::Boolean(value))
                 }
@@ -326,7 +318,9 @@ impl FmiComponent {
                         &mut value,
                     );
                     if status != 0 {
-                        return Err(FmiError::FunctionCall(format!("error code: {}", status)).into());
+                        return Err(
+                            FmiError::FunctionCall(format!("error code: {}", status)).into()
+                        );
                     }
                     Ok(DataValue::String(value))
                 }
@@ -341,56 +335,46 @@ impl FmiComponent {
                 (FmiValueType::Real, DataValue::Real(v)) => {
                     let v_f64 = v as f64;
                     let ptr = &v_f64 as *const f64;
-                    let status = (self.functions.set_real)(
-                        self.handle,
-                        &var.value_reference,
-                        1,
-                        ptr,
-                    );
+                    let status =
+                        (self.functions.set_real)(self.handle, &var.value_reference, 1, ptr);
                     if status != 0 {
-                        return Err(FmiError::FunctionCall(format!("error code: {}", status)).into());
+                        return Err(
+                            FmiError::FunctionCall(format!("error code: {}", status)).into()
+                        );
                     }
                 }
                 (FmiValueType::Integer, DataValue::Integer(v)) => {
                     let v_i64 = v as i64;
                     let ptr = &v_i64 as *const i64;
-                    let status = (self.functions.set_integer)(
-                        self.handle,
-                        &var.value_reference,
-                        1,
-                        ptr,
-                    );
+                    let status =
+                        (self.functions.set_integer)(self.handle, &var.value_reference, 1, ptr);
                     if status != 0 {
-                        return Err(FmiError::FunctionCall(format!("error code: {}", status)).into());
+                        return Err(
+                            FmiError::FunctionCall(format!("error code: {}", status)).into()
+                        );
                     }
                 }
                 (FmiValueType::Boolean, DataValue::Boolean(v)) => {
                     let ptr = &v as *const bool;
-                    let status = (self.functions.set_boolean)(
-                        self.handle,
-                        &var.value_reference,
-                        1,
-                        ptr,
-                    );
+                    let status =
+                        (self.functions.set_boolean)(self.handle, &var.value_reference, 1, ptr);
                     if status != 0 {
-                        return Err(FmiError::FunctionCall(format!("error code: {}", status)).into());
+                        return Err(
+                            FmiError::FunctionCall(format!("error code: {}", status)).into()
+                        );
                     }
                 }
                 (FmiValueType::String, DataValue::String(v)) => {
                     let ptr = &v as *const String;
-                    let status = (self.functions.set_string)(
-                        self.handle,
-                        &var.value_reference,
-                        1,
-                        ptr,
-                    );
+                    let status =
+                        (self.functions.set_string)(self.handle, &var.value_reference, 1, ptr);
                     if status != 0 {
-                        return Err(FmiError::FunctionCall(format!("error code: {}", status)).into());
+                        return Err(
+                            FmiError::FunctionCall(format!("error code: {}", status)).into()
+                        );
                     }
                 }
-                _ => return Err(FmiError::VariableAccess(
-                    "Type mismatch".to_string()
-                ).into()),
+                _ => return Err(FmiError::VariableAccess("Type mismatch".to_string()).into()),
             }
         }
         Ok(())
@@ -434,7 +418,8 @@ struct FmiFunctions {
     set_real: unsafe extern "C" fn(*mut std::ffi::c_void, *const u32, usize, *const f64) -> i32,
     set_integer: unsafe extern "C" fn(*mut std::ffi::c_void, *const u32, usize, *const i64) -> i32,
     set_boolean: unsafe extern "C" fn(*mut std::ffi::c_void, *const u32, usize, *const bool) -> i32,
-    set_string: unsafe extern "C" fn(*mut std::ffi::c_void, *const u32, usize, *const String) -> i32,
+    set_string:
+        unsafe extern "C" fn(*mut std::ffi::c_void, *const u32, usize, *const String) -> i32,
     terminate: unsafe extern "C" fn(*mut std::ffi::c_void) -> i32,
     free_instance: unsafe extern "C" fn(*mut std::ffi::c_void),
 }
@@ -507,7 +492,10 @@ fn load_fmi_functions(dll: &libloading::Library) -> Result<FmiFunctions> {
     unimplemented!()
 }
 
-fn instantiate_component(config: &FmiConfig, functions: &FmiFunctions) -> Result<*mut std::ffi::c_void> {
+fn instantiate_component(
+    config: &FmiConfig,
+    functions: &FmiFunctions,
+) -> Result<*mut std::ffi::c_void> {
     // TODO: Implement component instantiation
     unimplemented!()
 }
@@ -534,12 +522,15 @@ mod tests {
 
         let mut instance = FmiInstance::new(config).await.unwrap();
         instance.initialize(SimulationTime::zero()).await.unwrap();
-        
+
         // Test variable access
-        instance.set_value("test_var", DataValue::Real(1.0)).await.unwrap();
+        instance
+            .set_value("test_var", DataValue::Real(1.0))
+            .await
+            .unwrap();
         let value = instance.get_value("test_var").await.unwrap();
         assert_eq!(value.as_real().unwrap(), 1.0);
 
         instance.terminate().await.unwrap();
     }
-} 
+}

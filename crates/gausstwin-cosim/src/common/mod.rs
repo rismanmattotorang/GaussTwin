@@ -1,20 +1,16 @@
 //! Common functionality shared between FMI and HLA implementations
-//! 
+//!
 //! This module provides core data structures and algorithms used by both
 //! FMI and HLA implementations.
 
-pub mod time;
 pub mod data;
-pub mod sync;
 pub mod event;
-pub mod model;
 pub mod federation;
+pub mod model;
+pub mod sync;
+pub mod time;
 
-use std::{
-    collections::HashMap,
-    sync::Arc,
-    time::Duration,
-};
+use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use dashmap::DashMap;
 use parking_lot::RwLock;
@@ -22,13 +18,13 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::{broadcast, mpsc};
 use uuid::Uuid;
 
-use crate::Result;
-use crate::common::time::TimeManager;
-use crate::common::sync::SyncManager;
 use crate::common::data::DataValue;
-use crate::common::time::SimulationTime;
-use std::collections::HashSet;
+use crate::common::sync::SyncManager;
 use crate::common::sync::SyncMode;
+use crate::common::time::SimulationTime;
+use crate::common::time::TimeManager;
+use crate::Result;
+use std::collections::HashSet;
 
 /// Anti-message handling policies
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
@@ -56,19 +52,19 @@ pub enum InterpolationMethod {
 pub struct SharedState {
     /// Variable values with versioning
     values: DashMap<String, VersionedValue>,
-    
+
     /// Event channels for different priorities
     events: EventChannels,
-    
+
     /// Time manager
     time_manager: Arc<RwLock<TimeManager>>,
-    
+
     /// Statistics and monitoring
     stats: Arc<SimulationStats>,
-    
+
     /// Data exchange optimization
     data_router: Arc<DataRouter>,
-    
+
     /// Synchronization manager
     sync_manager: Arc<RwLock<SyncManager>>,
 }
@@ -141,10 +137,14 @@ impl SharedState {
         let (high_tx, _) = broadcast::channel(1000);
         let (normal_tx, _) = broadcast::channel(1000);
         let (low_tx, _) = broadcast::channel(1000);
-        
-        let sync_mode = crate::common::sync::SyncMode::Conservative { lookahead: Duration::from_secs(1), min_step: Duration::from_secs(1), max_lag: Duration::from_secs(1) };
+
+        let sync_mode = crate::common::sync::SyncMode::Conservative {
+            lookahead: Duration::from_secs(1),
+            min_step: Duration::from_secs(1),
+            max_lag: Duration::from_secs(1),
+        };
         let sync_manager = Arc::new(RwLock::new(SyncManager::new(sync_mode, 1)));
-        
+
         Self {
             values: DashMap::new(),
             events: EventChannels {
@@ -161,7 +161,9 @@ impl SharedState {
 
     /// Get variable value with version control
     pub fn get_value(&self, name: &str, time: SimulationTime) -> Option<DataValue> {
-        self.values.get(name).and_then(|v| v.get_value_at(time).cloned())
+        self.values
+            .get(name)
+            .and_then(|v| v.get_value_at(time).cloned())
     }
 
     /// Set variable value with versioning
@@ -173,7 +175,7 @@ impl SharedState {
             versioned.add_version(time, value);
             self.values.insert(name.clone(), versioned);
         }
-        
+
         // Notify dependents through data router
         self.data_router.notify_dependents(&name);
     }
@@ -194,8 +196,9 @@ impl SharedState {
             EventPriority::Normal => &self.events.normal,
             EventPriority::Low => &self.events.low,
         };
-        
-        sender.send(event)
+
+        sender
+            .send(event)
             .map_err(|e| CosimError::Runtime(format!("Failed to publish event: {}", e)))?;
         Ok(())
     }
@@ -214,16 +217,16 @@ pub enum EventPriority {
 pub struct SimulationStats {
     /// Number of steps executed
     pub steps: AtomicUsize,
-    
+
     /// Number of events processed
     pub events: AtomicUsize,
-    
+
     /// Number of data exchanges
     pub exchanges: AtomicUsize,
-    
+
     /// Total simulation time
     pub total_time: AtomicU64,
-    
+
     /// Number of errors
     pub errors: AtomicUsize,
 }
@@ -233,19 +236,19 @@ pub struct SimulationStats {
 pub struct VariableMetadata {
     /// Variable name
     pub name: String,
-    
+
     /// Variable type
     pub var_type: VariableType,
-    
+
     /// Unit (if applicable)
     pub unit: Option<String>,
-    
+
     /// Description
     pub description: Option<String>,
-    
+
     /// Causality
     pub causality: Causality,
-    
+
     /// Variability
     pub variability: Variability,
 }
@@ -287,10 +290,10 @@ pub enum Variability {
 pub enum TimeStatus {
     /// Time is granted
     Granted,
-    
+
     /// Time advance is pending
     Pending,
-    
+
     /// Time advance was rejected
     Rejected,
 }
@@ -300,13 +303,13 @@ pub enum TimeStatus {
 pub struct SimulationEvent {
     /// Event ID
     pub id: Uuid,
-    
+
     /// Event timestamp
     pub timestamp: SimulationTime,
-    
+
     /// Event type
     pub event_type: EventType,
-    
+
     /// Event data
     pub data: HashMap<String, DataValue>,
 }
@@ -316,20 +319,20 @@ pub struct SimulationEvent {
 pub enum EventType {
     /// Time event
     Time,
-    
+
     /// State event
     State,
-    
+
     /// Step event
     Step,
-    
+
     /// External event
     External,
 }
 
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 
-use super::CosimError; 
+use super::CosimError;
 
 impl DataRouter {
     pub fn new() -> Self {
@@ -365,4 +368,4 @@ impl VersionedValue {
     pub fn add_version(&mut self, _time: SimulationTime, value: DataValue) {
         self.history.push((_time, value));
     }
-} 
+}

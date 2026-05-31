@@ -1,19 +1,19 @@
 //! GaussTwin Data Layer
-//! 
+//!
 //! High-level abstraction layer coordinating vector and traditional database operations
 //! with optimized performance, robust error handling, and comprehensive metrics.
-//! 
+//!
 //! # Features
 //! - Unified interface for hybrid data operations
 //! - Built-in caching and connection pooling
 //! - Comprehensive metrics collection
 //! - Streaming support for large result sets
 //! - Batch operations for improved performance
-//! 
+//!
 //! # Examples
 //! ```no_run
 //! use gausstwin_data::{UnifiedStore, UnifiedStoreConfig, create_unified_store};
-//! 
+//!
 //! async fn example() -> anyhow::Result<()> {
 //!     let config = UnifiedStoreConfig::default();
 //!     let store = create_unified_store(config).await?;
@@ -28,11 +28,11 @@
 //! }
 //! ```
 
+use crate::error::DataResult;
 use async_trait::async_trait;
 use futures::Stream;
 use std::sync::Arc;
 use uuid::Uuid;
-use crate::error::DataResult;
 
 pub mod cache;
 pub mod config;
@@ -50,9 +50,8 @@ pub use metrics::MetricsCollector;
 pub use pool::*;
 pub use store::DataStore;
 pub use types::{
-    CacheConfig, DbConfig, HybridData, HybridRecord, MetricsConfig,
-    PoolConfig, ScalarData, SearchResult, Value, VectorData, VectorStoreConfig,
-    QueryFilters,
+    CacheConfig, DbConfig, HybridData, HybridRecord, MetricsConfig, PoolConfig, QueryFilters,
+    ScalarData, SearchResult, Value, VectorData, VectorStoreConfig,
 };
 
 /// Unified store trait for data operations
@@ -86,10 +85,7 @@ pub trait UnifiedStore: Send + Sync {
     ) -> DataResult<Box<dyn Stream<Item = DataResult<SearchResult>> + Send + 'a>>;
 
     /// Store multiple hybrid records
-    async fn batch_store_hybrid(
-        &self,
-        records: &[HybridRecord],
-    ) -> DataResult<Vec<Uuid>>;
+    async fn batch_store_hybrid(&self, records: &[HybridRecord]) -> DataResult<Vec<Uuid>>;
 
     /// Delete data by key
     async fn delete(&self, key: &str) -> DataResult<()>;
@@ -118,16 +114,16 @@ pub trait UnifiedStore: Send + Sync {
 pub struct UnifiedStoreConfig {
     /// Vector store configuration
     pub vector_config: VectorStoreConfig,
-    
+
     /// Database configuration
     pub db_config: DbConfig,
-    
+
     /// Cache configuration (optional)
     pub cache_config: Option<CacheConfig>,
-    
+
     /// Connection pool configuration
     pub pool_config: PoolConfig,
-    
+
     /// Metrics configuration
     pub metrics_config: MetricsConfig,
 }
@@ -172,13 +168,17 @@ impl UnifiedStoreConfig {
     pub fn validate(&self) -> DataResult<()> {
         // Validate vector store config
         if self.vector_config.dimension == 0 {
-            return Err(DataError::Config("Vector dimension must be greater than 0".into()));
+            return Err(DataError::Config(
+                "Vector dimension must be greater than 0".into(),
+            ));
         }
         if self.vector_config.nprobe == 0 {
             return Err(DataError::Config("nprobe must be greater than 0".into()));
         }
         if self.vector_config.ef_construction == 0 {
-            return Err(DataError::Config("ef_construction must be greater than 0".into()));
+            return Err(DataError::Config(
+                "ef_construction must be greater than 0".into(),
+            ));
         }
         if self.vector_config.ef_search == 0 {
             return Err(DataError::Config("ef_search must be greater than 0".into()));
@@ -186,37 +186,53 @@ impl UnifiedStoreConfig {
 
         // Validate database config
         if self.db_config.max_connections < self.db_config.min_connections {
-            return Err(DataError::Config("max_connections must be greater than or equal to min_connections".into()));
+            return Err(DataError::Config(
+                "max_connections must be greater than or equal to min_connections".into(),
+            ));
         }
         if self.db_config.connect_timeout.as_secs() == 0 {
-            return Err(DataError::Config("connect_timeout must be greater than 0".into()));
+            return Err(DataError::Config(
+                "connect_timeout must be greater than 0".into(),
+            ));
         }
         if self.db_config.idle_timeout.as_secs() == 0 {
-            return Err(DataError::Config("idle_timeout must be greater than 0".into()));
+            return Err(DataError::Config(
+                "idle_timeout must be greater than 0".into(),
+            ));
         }
 
         // Validate pool config
         if self.pool_config.max_size < self.pool_config.min_idle {
-            return Err(DataError::Config("pool max_size must be greater than or equal to min_idle".into()));
+            return Err(DataError::Config(
+                "pool max_size must be greater than or equal to min_idle".into(),
+            ));
         }
         if self.pool_config.connection_timeout.as_secs() == 0 {
-            return Err(DataError::Config("pool connection_timeout must be greater than 0".into()));
+            return Err(DataError::Config(
+                "pool connection_timeout must be greater than 0".into(),
+            ));
         }
         if let Some(max_lifetime) = self.pool_config.max_lifetime {
             if max_lifetime.as_secs() == 0 {
-                return Err(DataError::Config("pool max_lifetime must be greater than 0".into()));
+                return Err(DataError::Config(
+                    "pool max_lifetime must be greater than 0".into(),
+                ));
             }
         }
         if let Some(idle_timeout) = self.pool_config.idle_timeout {
             if idle_timeout.as_secs() == 0 {
-                return Err(DataError::Config("pool idle_timeout must be greater than 0".into()));
+                return Err(DataError::Config(
+                    "pool idle_timeout must be greater than 0".into(),
+                ));
             }
         }
 
         // Validate cache config if present
         if let Some(cache_config) = &self.cache_config {
             if cache_config.max_size == 0 {
-                return Err(DataError::Config("cache max_size must be greater than 0".into()));
+                return Err(DataError::Config(
+                    "cache max_size must be greater than 0".into(),
+                ));
             }
             if cache_config.ttl.as_secs() == 0 {
                 return Err(DataError::Config("cache ttl must be greater than 0".into()));
@@ -225,7 +241,9 @@ impl UnifiedStoreConfig {
 
         // Validate metrics config
         if self.metrics_config.enabled && self.metrics_config.report_interval.as_secs() == 0 {
-            return Err(DataError::Config("metrics report_interval must be greater than 0".into()));
+            return Err(DataError::Config(
+                "metrics report_interval must be greater than 0".into(),
+            ));
         }
 
         Ok(())
@@ -233,51 +251,49 @@ impl UnifiedStoreConfig {
 }
 
 /// Create a new unified store instance
-/// 
+///
 /// This function creates a fully-configured unified store with vector and scalar
 /// database backends, caching layer, and connection pooling.
-/// 
+///
 /// # Arguments
 /// * `config` - Configuration for the unified store
-/// 
+///
 /// # Returns
 /// * `DataResult<impl UnifiedStore>` - A boxed unified store implementation
-/// 
+///
 /// # Example
 /// ```no_run
 /// use gausstwin_data::{create_unified_store, UnifiedStoreConfig};
-/// 
+///
 /// async fn example() -> anyhow::Result<()> {
 ///     let config = UnifiedStoreConfig::default();
 ///     let store = create_unified_store(config).await?;
 ///     Ok(())
 /// }
 /// ```
-pub async fn create_unified_store(config: UnifiedStoreConfig) -> DataResult<Box<dyn UnifiedStore + Send + Sync>> {
+pub async fn create_unified_store(
+    config: UnifiedStoreConfig,
+) -> DataResult<Box<dyn UnifiedStore + Send + Sync>> {
     // Validate configuration
     config.validate()?;
-    
+
     // Create in-memory vector store
     let vector_store = Arc::new(InMemoryVectorStore::new(config.vector_config.dimension));
-    
+
     // Create in-memory scalar store
     let scalar_store = Arc::new(InMemoryScalarStore::new());
-    
+
     // Create cache layer
-    let cache: Arc<dyn cache::AsyncCache<String, HybridData>> = if let Some(cache_config) = &config.cache_config {
-        Arc::new(cache::LruCache::new(cache_config.clone()))
-    } else {
-        Arc::new(cache::LruCache::new(CacheConfig::default()))
-    };
-    
+    let cache: Arc<dyn cache::AsyncCache<String, HybridData>> =
+        if let Some(cache_config) = &config.cache_config {
+            Arc::new(cache::LruCache::new(cache_config.clone()))
+        } else {
+            Arc::new(cache::LruCache::new(CacheConfig::default()))
+        };
+
     // Create unified store implementation
-    let store = store::UnifiedStoreImpl::new(
-        vector_store,
-        scalar_store,
-        cache,
-        config,
-    );
-    
+    let store = store::UnifiedStoreImpl::new(vector_store, scalar_store, cache, config);
+
     Ok(Box::new(store))
 }
 
@@ -300,27 +316,29 @@ impl InMemoryVectorStore {
 impl store::DataStore for InMemoryVectorStore {
     async fn get(&self, key: &str) -> error::DataResult<Option<serde_json::Value>> {
         let vectors = self.vectors.read().await;
-        Ok(vectors.get(key).map(|v| serde_json::to_value(v).unwrap_or_default()))
+        Ok(vectors
+            .get(key)
+            .map(|v| serde_json::to_value(v).unwrap_or_default()))
     }
-    
+
     async fn set(&self, key: &str, value: serde_json::Value) -> error::DataResult<()> {
         let mut vectors = self.vectors.write().await;
         let vector_data: VectorData = serde_json::from_value(value)?;
         vectors.insert(key.to_string(), vector_data);
         Ok(())
     }
-    
+
     async fn delete(&self, key: &str) -> error::DataResult<()> {
         let mut vectors = self.vectors.write().await;
         vectors.remove(key);
         Ok(())
     }
-    
+
     async fn get_vector(&self, key: &str) -> error::DataResult<Option<VectorData>> {
         let vectors = self.vectors.read().await;
         Ok(vectors.get(key).cloned())
     }
-    
+
     async fn get_scalar(&self, key: &str) -> error::DataResult<Option<ScalarData>> {
         let vectors = self.vectors.read().await;
         Ok(vectors.get(key).map(|v| ScalarData {
@@ -328,7 +346,7 @@ impl store::DataStore for InMemoryVectorStore {
             metadata: serde_json::json!({}),
         }))
     }
-    
+
     async fn get_hybrid(&self, key: &str) -> error::DataResult<Option<HybridData>> {
         let vectors = self.vectors.read().await;
         Ok(vectors.get(key).map(|v| HybridData {
@@ -337,12 +355,12 @@ impl store::DataStore for InMemoryVectorStore {
             metadata: serde_json::json!({}),
         }))
     }
-    
+
     async fn search_vectors(
         &self,
         query: &VectorData,
         limit: usize,
-        _filters: Option<QueryFilters>
+        _filters: Option<QueryFilters>,
     ) -> error::DataResult<Vec<SearchResult>> {
         let vectors = self.vectors.read().await;
         let mut results: Vec<(String, f32, VectorData)> = vectors
@@ -352,19 +370,22 @@ impl store::DataStore for InMemoryVectorStore {
                 (k.clone(), score, v.clone())
             })
             .collect();
-        
+
         results.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
         results.truncate(limit);
-        
-        Ok(results.into_iter().map(|(key, score, v)| SearchResult {
-            key,
-            score,
-            data: HybridData {
-                vector: Some(v.vector),
-                value: v.metadata,
-                metadata: serde_json::json!({}),
-            },
-        }).collect())
+
+        Ok(results
+            .into_iter()
+            .map(|(key, score, v)| SearchResult {
+                key,
+                score,
+                data: HybridData {
+                    vector: Some(v.vector),
+                    value: v.metadata,
+                    metadata: serde_json::json!({}),
+                },
+            })
+            .collect())
     }
 }
 
@@ -385,31 +406,33 @@ impl InMemoryScalarStore {
 impl store::DataStore for InMemoryScalarStore {
     async fn get(&self, key: &str) -> error::DataResult<Option<serde_json::Value>> {
         let data = self.data.read().await;
-        Ok(data.get(key).map(|v| serde_json::to_value(v).unwrap_or_default()))
+        Ok(data
+            .get(key)
+            .map(|v| serde_json::to_value(v).unwrap_or_default()))
     }
-    
+
     async fn set(&self, key: &str, value: serde_json::Value) -> error::DataResult<()> {
         let mut data = self.data.write().await;
         let scalar_data: ScalarData = serde_json::from_value(value)?;
         data.insert(key.to_string(), scalar_data);
         Ok(())
     }
-    
+
     async fn delete(&self, key: &str) -> error::DataResult<()> {
         let mut data = self.data.write().await;
         data.remove(key);
         Ok(())
     }
-    
+
     async fn get_vector(&self, _key: &str) -> error::DataResult<Option<VectorData>> {
         Ok(None)
     }
-    
+
     async fn get_scalar(&self, key: &str) -> error::DataResult<Option<ScalarData>> {
         let data = self.data.read().await;
         Ok(data.get(key).cloned())
     }
-    
+
     async fn get_hybrid(&self, key: &str) -> error::DataResult<Option<HybridData>> {
         let data = self.data.read().await;
         Ok(data.get(key).map(|v| HybridData {
@@ -418,12 +441,12 @@ impl store::DataStore for InMemoryScalarStore {
             metadata: v.metadata.clone(),
         }))
     }
-    
+
     async fn search_vectors(
         &self,
         _query: &VectorData,
         _limit: usize,
-        _filters: Option<QueryFilters>
+        _filters: Option<QueryFilters>,
     ) -> error::DataResult<Vec<SearchResult>> {
         Ok(Vec::new())
     }
@@ -434,15 +457,15 @@ fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
     if a.len() != b.len() || a.is_empty() {
         return 0.0;
     }
-    
+
     let dot_product: f32 = a.iter().zip(b.iter()).map(|(x, y)| x * y).sum();
     let norm_a: f32 = a.iter().map(|x| x * x).sum::<f32>().sqrt();
     let norm_b: f32 = b.iter().map(|x| x * x).sum::<f32>().sqrt();
-    
+
     if norm_a == 0.0 || norm_b == 0.0 {
         return 0.0;
     }
-    
+
     dot_product / (norm_a * norm_b)
 }
 
@@ -452,4 +475,4 @@ mod tests {
     use rstest::*;
 
     // Test fixtures and helper functions will be added here
-} 
+}

@@ -227,7 +227,7 @@ impl ModbusConnector {
         // Simulate read - in production this would use actual Modbus protocol
         let mut result = Vec::with_capacity(quantity as usize);
         let cache = self.state.coil_cache.read().await;
-        
+
         for i in 0..quantity {
             let addr = address + i;
             result.push(*cache.get(&addr).unwrap_or(&false));
@@ -269,7 +269,7 @@ impl ModbusConnector {
         // Check cache first
         let cache = self.state.register_cache.read().await;
         let key = (RegisterType::HoldingRegister, address);
-        
+
         let result = if let Some(cached) = cache.get(&key) {
             cached.clone()
         } else {
@@ -279,7 +279,10 @@ impl ModbusConnector {
         self.internal_metrics.reads.fetch_add(1, Ordering::Relaxed);
         self.record_latency(start.elapsed()).await;
 
-        debug!("Read {} holding registers from address {}", quantity, address);
+        debug!(
+            "Read {} holding registers from address {}",
+            quantity, address
+        );
         Ok(result)
     }
 
@@ -401,10 +404,12 @@ impl ModbusConnector {
         }
 
         // Write first
-        self.write_multiple_registers(write_address, write_values).await?;
+        self.write_multiple_registers(write_address, write_values)
+            .await?;
 
         // Then read
-        self.read_holding_registers(read_address, read_quantity).await
+        self.read_holding_registers(read_address, read_quantity)
+            .await
     }
 
     /// Read a data point with type conversion
@@ -412,17 +417,29 @@ impl ModbusConnector {
         let raw_values = match point.register_type {
             RegisterType::Coil => {
                 let values = self.read_coils(point.address, point.quantity).await?;
-                vec![if values.first().copied().unwrap_or(false) { 1u16 } else { 0u16 }]
+                vec![if values.first().copied().unwrap_or(false) {
+                    1u16
+                } else {
+                    0u16
+                }]
             }
             RegisterType::DiscreteInput => {
-                let values = self.read_discrete_inputs(point.address, point.quantity).await?;
-                vec![if values.first().copied().unwrap_or(false) { 1u16 } else { 0u16 }]
+                let values = self
+                    .read_discrete_inputs(point.address, point.quantity)
+                    .await?;
+                vec![if values.first().copied().unwrap_or(false) {
+                    1u16
+                } else {
+                    0u16
+                }]
             }
             RegisterType::InputRegister => {
-                self.read_input_registers(point.address, point.quantity).await?
+                self.read_input_registers(point.address, point.quantity)
+                    .await?
             }
             RegisterType::HoldingRegister => {
-                self.read_holding_registers(point.address, point.quantity).await?
+                self.read_holding_registers(point.address, point.quantity)
+                    .await?
             }
         };
 
@@ -437,7 +454,11 @@ impl ModbusConnector {
 
     fn convert_registers(&self, registers: &[u16], data_type: DataType) -> Result<f64> {
         match data_type {
-            DataType::Bool => Ok(if registers.first().copied().unwrap_or(0) != 0 { 1.0 } else { 0.0 }),
+            DataType::Bool => Ok(if registers.first().copied().unwrap_or(0) != 0 {
+                1.0
+            } else {
+                0.0
+            }),
             DataType::Int16 => Ok(registers.first().copied().unwrap_or(0) as i16 as f64),
             DataType::UInt16 => Ok(registers.first().copied().unwrap_or(0) as f64),
             DataType::Int32 => {
@@ -445,7 +466,9 @@ impl ModbusConnector {
                     let value = ((registers[0] as u32) << 16) | (registers[1] as u32);
                     Ok(value as i32 as f64)
                 } else {
-                    Err(Error::Protocol("Not enough registers for Int32".to_string()))
+                    Err(Error::Protocol(
+                        "Not enough registers for Int32".to_string(),
+                    ))
                 }
             }
             DataType::UInt32 => {
@@ -453,7 +476,9 @@ impl ModbusConnector {
                     let value = ((registers[0] as u32) << 16) | (registers[1] as u32);
                     Ok(value as f64)
                 } else {
-                    Err(Error::Protocol("Not enough registers for UInt32".to_string()))
+                    Err(Error::Protocol(
+                        "Not enough registers for UInt32".to_string(),
+                    ))
                 }
             }
             DataType::Float32 => {
@@ -461,7 +486,9 @@ impl ModbusConnector {
                     let bits = ((registers[0] as u32) << 16) | (registers[1] as u32);
                     Ok(f32::from_bits(bits) as f64)
                 } else {
-                    Err(Error::Protocol("Not enough registers for Float32".to_string()))
+                    Err(Error::Protocol(
+                        "Not enough registers for Float32".to_string(),
+                    ))
                 }
             }
             DataType::Int64 | DataType::UInt64 | DataType::Float64 => {
@@ -477,12 +504,14 @@ impl ModbusConnector {
                         _ => unreachable!(),
                     }
                 } else {
-                    Err(Error::Protocol("Not enough registers for 64-bit type".to_string()))
+                    Err(Error::Protocol(
+                        "Not enough registers for 64-bit type".to_string(),
+                    ))
                 }
             }
-            DataType::String => {
-                Err(Error::Protocol("String conversion not supported for numeric result".to_string()))
-            }
+            DataType::String => Err(Error::Protocol(
+                "String conversion not supported for numeric result".to_string(),
+            )),
         }
     }
 
@@ -513,7 +542,11 @@ impl ModbusConnector {
         };
 
         Metrics {
-            connections: if self.state.connected.load(Ordering::SeqCst) { 1 } else { 0 },
+            connections: if self.state.connected.load(Ordering::SeqCst) {
+                1
+            } else {
+                0
+            },
             connection_failures: 0,
             messages_sent: self.internal_metrics.writes.load(Ordering::Relaxed),
             messages_received: self.internal_metrics.reads.load(Ordering::Relaxed),
@@ -531,9 +564,7 @@ impl Connector for ModbusConnector {
     async fn connect(&mut self) -> Result<()> {
         info!(
             "Connecting to Modbus {:?} at {}:{}",
-            self.modbus_config.connection_type,
-            self.modbus_config.host,
-            self.modbus_config.port
+            self.modbus_config.connection_type, self.modbus_config.host, self.modbus_config.port
         );
 
         // Simulate connection - in production this would establish actual connection

@@ -1,40 +1,38 @@
-use nalgebra::Vector3;
 use super::Position;
+use nalgebra::Vector3;
 
 /// Calculate Euclidean distance between positions
 pub fn euclidean_distance(p1: &Position, p2: &Position) -> f64 {
     match (p1, p2) {
-        (Position::Grid(v1), Position::Grid(v2)) |
-        (Position::Continuous(v1), Position::Continuous(v2)) => {
+        (Position::Grid(v1), Position::Grid(v2))
+        | (Position::Continuous(v1), Position::Continuous(v2)) => {
             let diff = v1 - v2;
             diff.norm()
         }
-        _ => f64::INFINITY
+        _ => f64::INFINITY,
     }
 }
 
 /// Calculate Manhattan distance between positions
 pub fn manhattan_distance(p1: &Position, p2: &Position) -> f64 {
     match (p1, p2) {
-        (Position::Grid(v1), Position::Grid(v2)) |
-        (Position::Continuous(v1), Position::Continuous(v2)) => {
-            (v1.x - v2.x).abs() + 
-            (v1.y - v2.y).abs() + 
-            (v1.z - v2.z).abs()
+        (Position::Grid(v1), Position::Grid(v2))
+        | (Position::Continuous(v1), Position::Continuous(v2)) => {
+            (v1.x - v2.x).abs() + (v1.y - v2.y).abs() + (v1.z - v2.z).abs()
         }
-        _ => f64::INFINITY
+        _ => f64::INFINITY,
     }
 }
 
 /// Calculate Chebyshev distance between positions
 pub fn chebyshev_distance(p1: &Position, p2: &Position) -> f64 {
     match (p1, p2) {
-        (Position::Grid(v1), Position::Grid(v2)) |
-        (Position::Continuous(v1), Position::Continuous(v2)) => {
+        (Position::Grid(v1), Position::Grid(v2))
+        | (Position::Continuous(v1), Position::Continuous(v2)) => {
             let diff = v1 - v2;
             diff.abs().max()
         }
-        _ => f64::INFINITY
+        _ => f64::INFINITY,
     }
 }
 
@@ -79,14 +77,14 @@ pub fn direction(pos1: &Position, pos2: &Position) -> Position {
 
 pub fn direction_vector(from: &Position, to: &Position) -> Option<Position> {
     match (from, to) {
-        (Position::Grid(v1), Position::Grid(v2)) |
-        (Position::Continuous(v1), Position::Continuous(v2)) => {
+        (Position::Grid(v1), Position::Grid(v2))
+        | (Position::Continuous(v1), Position::Continuous(v2)) => {
             let dir = v2 - v1;
             match from {
                 Position::Grid(_) => Some(Position::Grid(dir)),
-                Position::Continuous(_) => Some(Position::Continuous(dir))
+                Position::Continuous(_) => Some(Position::Continuous(dir)),
             }
         }
-        _ => None
+        _ => None,
     }
-} 
+}

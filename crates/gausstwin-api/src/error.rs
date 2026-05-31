@@ -1,6 +1,6 @@
+use serde::{Deserialize, Serialize};
 use std::fmt;
 use thiserror::Error;
-use serde::{Serialize, Deserialize};
 
 /// Result type for the API server
 pub type Result<T> = std::result::Result<T, Error>;
@@ -178,7 +178,8 @@ impl Error {
             Error::Io(_) => "IO_ERROR",
             Error::Json(_) => "JSON_ERROR",
             Error::Jwt(_) => "JWT_ERROR",
-        }.to_string()
+        }
+        .to_string()
     }
 
     /// Convert the error to an error response
@@ -238,4 +239,4 @@ mod tests {
         assert_eq!(response.code, "AUTHENTICATION_ERROR");
         assert_eq!(response.message, "Authentication error: Invalid token");
     }
-} 
+}

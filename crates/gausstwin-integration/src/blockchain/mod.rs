@@ -1,10 +1,10 @@
 //! Blockchain Connectors
-//! 
+//!
 //! Provides integration with various blockchain platforms and protocols.
 
+use crate::{Config, Connector, Error, Result};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
-use crate::{Connector, Config, Error, Result};
 
 pub mod ethereum;
 // pub mod solana;
@@ -93,25 +93,35 @@ pub struct BlockchainFeatures {
 pub trait BlockchainConnector: Connector {
     /// Get current block number
     async fn get_block_number(&self) -> Result<u64>;
-    
+
     /// Get transaction by hash
     async fn get_transaction(&self, hash: &str) -> Result<Transaction>;
-    
+
     /// Send transaction
     async fn send_transaction(&mut self, transaction: Transaction) -> Result<String>;
-    
+
     /// Deploy smart contract
     async fn deploy_contract(&mut self, contract: Contract) -> Result<String>;
-    
+
     /// Call smart contract method
-    async fn call_contract(&mut self, address: &str, method: &str, params: serde_json::Value) -> Result<serde_json::Value>;
-    
+    async fn call_contract(
+        &mut self,
+        address: &str,
+        method: &str,
+        params: serde_json::Value,
+    ) -> Result<serde_json::Value>;
+
     /// Subscribe to events
     async fn subscribe_events(&mut self, contract_address: &str, event_name: &str) -> Result<()>;
-    
+
     /// Get contract events
-    async fn get_events(&self, contract_address: &str, from_block: u64, to_block: Option<u64>) -> Result<Vec<Event>>;
-    
+    async fn get_events(
+        &self,
+        contract_address: &str,
+        from_block: u64,
+        to_block: Option<u64>,
+    ) -> Result<Vec<Event>>;
+
     /// Get chain capabilities
     fn capabilities(&self) -> BlockchainCapabilities;
 }
@@ -129,17 +139,17 @@ impl Connector for EthereumConnector {
         // Implementation
         Ok(())
     }
-    
+
     async fn disconnect(&mut self) -> Result<()> {
         // Implementation
         Ok(())
     }
-    
+
     async fn is_connected(&self) -> bool {
         // Implementation
         true
     }
-    
+
     fn metrics(&self) -> &crate::common::Metrics {
         &self.metrics
     }
@@ -151,37 +161,47 @@ impl BlockchainConnector for EthereumConnector {
         // Implementation
         Ok(0)
     }
-    
+
     async fn get_transaction(&self, hash: &str) -> Result<Transaction> {
         // Implementation
         unimplemented!()
     }
-    
+
     async fn send_transaction(&mut self, transaction: Transaction) -> Result<String> {
         // Implementation
         Ok(String::new())
     }
-    
+
     async fn deploy_contract(&mut self, contract: Contract) -> Result<String> {
         // Implementation
         Ok(String::new())
     }
-    
-    async fn call_contract(&mut self, address: &str, method: &str, params: serde_json::Value) -> Result<serde_json::Value> {
+
+    async fn call_contract(
+        &mut self,
+        address: &str,
+        method: &str,
+        params: serde_json::Value,
+    ) -> Result<serde_json::Value> {
         // Implementation
         Ok(serde_json::Value::Null)
     }
-    
+
     async fn subscribe_events(&mut self, contract_address: &str, event_name: &str) -> Result<()> {
         // Implementation
         Ok(())
     }
-    
-    async fn get_events(&self, contract_address: &str, from_block: u64, to_block: Option<u64>) -> Result<Vec<Event>> {
+
+    async fn get_events(
+        &self,
+        contract_address: &str,
+        from_block: u64,
+        to_block: Option<u64>,
+    ) -> Result<Vec<Event>> {
         // Implementation
         Ok(vec![])
     }
-    
+
     fn capabilities(&self) -> BlockchainCapabilities {
         BlockchainCapabilities {
             chain_type: ChainType::Public,
@@ -202,7 +222,7 @@ impl BlockchainConnector for EthereumConnector {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_blockchain_capabilities_structure() {
         // Test that blockchain capabilities can be constructed
@@ -219,10 +239,10 @@ mod tests {
             },
             smart_contracts: true,
         };
-        
+
         assert!(matches!(capabilities.chain_type, ChainType::Public));
         assert!(capabilities.features.token_support);
         assert!(capabilities.features.defi_support);
         assert!(capabilities.smart_contracts);
     }
-} 
+}

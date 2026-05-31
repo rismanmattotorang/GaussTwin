@@ -2,10 +2,10 @@ use criterion::{
     black_box, criterion_group, criterion_main, BatchSize, BenchmarkId, Criterion, Throughput,
 };
 use gausstwin_spaces::{
-    Point, SpatialIndex, VisualizationConfig,
     common::{DistanceMetric, HighPerformanceMemoryPool},
+    Point, SpatialIndex, VisualizationConfig,
 };
-use rand::{Rng, thread_rng};
+use rand::{thread_rng, Rng};
 use rayon::prelude::*;
 use std::{
     sync::Arc,
@@ -39,7 +39,7 @@ fn bench_kdtree(c: &mut Criterion) {
 
     for &point_count in POINT_COUNTS.iter() {
         let points = generate_random_points(point_count, 100.0);
-        
+
         // Insertion benchmarks
         group.throughput(Throughput::Elements(point_count as u64));
         group.bench_with_input(
@@ -107,7 +107,7 @@ fn bench_grid_hash(c: &mut Criterion) {
 
     for &point_count in POINT_COUNTS.iter() {
         let points = generate_random_points(point_count, 100.0);
-        
+
         // Test different cell sizes
         for cell_size in [1.0, 2.0, 5.0].iter() {
             group.throughput(Throughput::Elements(point_count as u64));
@@ -164,7 +164,7 @@ fn bench_rtree(c: &mut Criterion) {
 
     for &point_count in POINT_COUNTS.iter() {
         let points = generate_random_points(point_count, 100.0);
-        
+
         // Insertion benchmarks
         group.throughput(Throughput::Elements(point_count as u64));
         group.bench_with_input(
@@ -231,7 +231,7 @@ fn bench_octree(c: &mut Criterion) {
 
     for &point_count in POINT_COUNTS.iter() {
         let points = generate_random_points(point_count, 100.0);
-        
+
         // Insertion benchmarks
         group.throughput(Throughput::Elements(point_count as u64));
         group.bench_with_input(
@@ -283,7 +283,7 @@ fn bench_memory_pool(c: &mut Criterion) {
 
     for &batch_size in BATCH_SIZES.iter() {
         group.throughput(Throughput::Elements(batch_size as u64));
-        
+
         // Allocation benchmarks
         group.bench_with_input(
             BenchmarkId::new("allocate", batch_size),
@@ -391,4 +391,4 @@ criterion_group!(
     bench_memory_pool,
     bench_simd_distance,
 );
-criterion_main!(benches); 
+criterion_main!(benches);

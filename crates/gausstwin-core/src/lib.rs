@@ -26,29 +26,29 @@
 compile_error!("features `std` and `no_std` are mutually exclusive");
 
 // Re-exports
-pub use uuid::Uuid;
 pub use serde::{Deserialize, Serialize};
+pub use uuid::Uuid;
 
 // Core modules
 pub mod agent;
-pub mod scheduler;
-pub mod model;
-pub mod time;
 pub mod error;
 pub mod event;
 pub mod metrics;
-pub mod space;
+pub mod model;
 pub mod pool;
+pub mod scheduler;
+pub mod space;
+pub mod time;
 
 // Convenience re-exports
 pub use agent::{Agent, AgentId, AgentState, BasicAgent};
-pub use space::{Space, Position, VecN, Bounds, SpaceExtent};
-pub use scheduler::{Scheduler, SchedulerKind};
-pub use model::{Model, ModelConfig, ModelMetrics};
-pub use time::{SimTime, TimeStep, Duration};
 pub use error::{GaussTwinError, Result};
 pub use event::{Event, EventKind, EventQueue};
-pub use metrics::{MetricsCollector, MetricsConfig, Measurable};
+pub use metrics::{Measurable, MetricsCollector, MetricsConfig};
+pub use model::{Model, ModelConfig, ModelMetrics};
+pub use scheduler::{Scheduler, SchedulerKind};
+pub use space::{Bounds, Position, Space, SpaceExtent, VecN};
+pub use time::{Duration, SimTime, TimeStep};
 
 /// Type alias for entity identifiers
 pub type EntityId = u64;
@@ -105,4 +105,4 @@ pub mod blockchain;
 pub mod viz;
 
 /// Performance profiling and optimization
-pub mod profiler; 
+pub mod profiler;

@@ -215,10 +215,7 @@ impl Visualizer {
             config.background_color.2,
         );
 
-        let camera = ArcBall::new(
-            config.camera_config.eye,
-            config.camera_config.target,
-        );
+        let camera = ArcBall::new(config.camera_config.eye, config.camera_config.target);
 
         let mut visualizer = Self {
             config,
@@ -241,14 +238,20 @@ impl Visualizer {
         // Setup post-processing effects based on quality settings
         let settings = self.config.rendering_quality.get_settings();
         if settings.bloom {
-            self.window.set_post_processing_effect(PostProcessingEffect::Bloom(0.5));
+            self.window
+                .set_post_processing_effect(PostProcessingEffect::Bloom(0.5));
         }
 
         Ok(())
     }
 
     /// Add a point to the visualization
-    pub fn add_point(&mut self, id: usize, point: Point, color: (f32, f32, f32)) -> SpatialResult<()> {
+    pub fn add_point(
+        &mut self,
+        id: usize,
+        point: Point,
+        color: (f32, f32, f32),
+    ) -> SpatialResult<()> {
         let mut node = self.window.add_sphere(self.config.point_size);
         node.set_color(color.0, color.1, color.2);
         node.set_local_translation(Translation3::new(
@@ -326,12 +329,12 @@ impl Visualizer {
 
     /// Save the current view to an image file
     pub fn save_screenshot(&self, path: &str) -> SpatialResult<()> {
-        self.window
-            .snap_image(path)
-            .map_err(|_| SpatialError::IoError(std::io::Error::new(
+        self.window.snap_image(path).map_err(|_| {
+            SpatialError::IoError(std::io::Error::new(
                 std::io::ErrorKind::Other,
                 "Failed to save screenshot",
-            )))
+            ))
+        })
     }
 
     /// Create a 2D plot of points
@@ -363,17 +366,13 @@ impl Visualizer {
             .y_label_area_size(30)
             .build_cartesian_2d(min_x..max_x, min_y..max_y)?;
 
-        chart
-            .configure_mesh()
-            .draw()?;
+        chart.configure_mesh().draw()?;
 
-        chart.draw_series(points.iter().map(|p| {
-            Circle::new(
-                (p.x, p.y),
-                3,
-                ShapeStyle::from(&BLACK).filled(),
-            )
-        }))?;
+        chart.draw_series(
+            points
+                .iter()
+                .map(|p| Circle::new((p.x, p.y), 3, ShapeStyle::from(&BLACK).filled())),
+        )?;
 
         root.present()?;
         Ok(())
@@ -425,4 +424,4 @@ mod tests {
         assert_eq!(config.znear, 0.1);
         assert_eq!(config.zfar, 1000.0);
     }
-} 
+}

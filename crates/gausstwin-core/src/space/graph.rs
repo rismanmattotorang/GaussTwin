@@ -1,8 +1,8 @@
-use petgraph::graph::{Graph, NodeIndex};
-use std::collections::{HashMap, HashSet};
 use crate::agent::AgentId;
 use crate::error::Result;
-use crate::space::{Position, SpaceExtent, Space, VecN, Bounds};
+use crate::space::{Bounds, Position, Space, SpaceExtent, VecN};
+use petgraph::graph::{Graph, NodeIndex};
+use std::collections::{HashMap, HashSet};
 
 #[derive(Debug)]
 /// Graph-based space implementation
@@ -22,11 +22,10 @@ impl GraphSpace {
     }
 
     fn find_node_with_agent(&self, agent_id: &AgentId) -> Option<NodeIndex> {
-        self.graph.node_indices()
-            .find(|&idx| {
-                let agents = &self.graph[idx];
-                agents.contains(agent_id)
-            })
+        self.graph.node_indices().find(|&idx| {
+            let agents = &self.graph[idx];
+            agents.contains(agent_id)
+        })
     }
 
     fn get_neighbors(&self, node: NodeIndex, distance: usize) -> HashSet<NodeIndex> {
@@ -78,7 +77,8 @@ impl Space for GraphSpace {
     }
 
     fn get_position(&self, agent_id: &AgentId) -> Option<Position> {
-        self.agent_nodes.get(agent_id)
+        self.agent_nodes
+            .get(agent_id)
             .and_then(|node| self.positions.get(node))
             .map(|pos| Position::Continuous(pos.clone()))
     }
@@ -92,7 +92,8 @@ impl Space for GraphSpace {
 
     fn get_agents_at(&self, pos: &Position) -> Vec<AgentId> {
         let coords = pos.coords();
-        self.positions.iter()
+        self.positions
+            .iter()
             .filter(|(_, p)| *p == coords)
             .flat_map(|(node, _)| self.graph.node_weight(*node).unwrap().iter().cloned())
             .collect()
@@ -103,7 +104,8 @@ impl Space for GraphSpace {
     }
 
     fn get_positions(&self) -> Vec<Position> {
-        self.positions.values()
+        self.positions
+            .values()
             .map(|pos| Position::Continuous(pos.clone()))
             .collect()
     }
@@ -115,8 +117,9 @@ impl Space for GraphSpace {
     fn get_neighbors(&self, pos: &Position, radius: f64) -> Vec<Position> {
         let center = pos.coords();
         let radius_sq = radius * radius;
-        
-        self.positions.values()
+
+        self.positions
+            .values()
             .filter(|p| {
                 let diff = *p - center;
                 diff.dot(&diff) <= radius_sq
@@ -128,8 +131,9 @@ impl Space for GraphSpace {
     fn query_radius(&self, center: &Position, radius: f64) -> Vec<AgentId> {
         let center_coords = center.coords();
         let radius_sq = radius * radius;
-        
-        self.positions.iter()
+
+        self.positions
+            .iter()
             .filter(|(_, pos)| {
                 let diff = *pos - center_coords;
                 diff.dot(&diff) <= radius_sq
@@ -140,21 +144,22 @@ impl Space for GraphSpace {
 
     fn nearest_neighbors(&self, position: &Position, k: usize) -> Vec<AgentId> {
         let pos_coords = position.coords();
-        let mut distances: Vec<_> = self.positions.iter()
+        let mut distances: Vec<_> = self
+            .positions
+            .iter()
             .flat_map(|(node, pos)| {
                 let diff = pos - pos_coords;
                 let dist = diff.dot(&diff).sqrt();
-                self.graph.node_weight(*node).unwrap()
+                self.graph
+                    .node_weight(*node)
+                    .unwrap()
                     .iter()
                     .map(move |agent_id| (agent_id.clone(), dist))
             })
             .collect();
 
         distances.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
-        distances.into_iter()
-            .take(k)
-            .map(|(id, _)| id)
-            .collect()
+        distances.into_iter().take(k).map(|(id, _)| id).collect()
     }
 
     fn bounds(&self) -> Bounds {
@@ -181,9 +186,11 @@ impl Space for GraphSpace {
     }
 
     fn positions(&self) -> Vec<(AgentId, Position)> {
-        self.agent_nodes.iter()
+        self.agent_nodes
+            .iter()
             .filter_map(|(agent_id, node)| {
-                self.positions.get(node)
+                self.positions
+                    .get(node)
                     .map(|pos| (agent_id.clone(), Position::Continuous(pos.clone())))
             })
             .collect()
@@ -192,4 +199,4 @@ impl Space for GraphSpace {
     fn extent(&self) -> SpaceExtent {
         SpaceExtent::Continuous(self.bounds())
     }
-} 
+}

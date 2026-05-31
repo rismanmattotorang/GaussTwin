@@ -1,12 +1,12 @@
 //! GaussTwin Discrete Event Simulation
-//! 
+//!
 //! A high-performance discrete event simulation engine with features including:
 //! - Priority-based event scheduling
 //! - Parallel event execution
 //! - Event dependencies and causality tracking
 //! - Rollback support
 //! - Comprehensive metrics and monitoring
-//! 
+//!
 //! # Features
 //! - Multiple event priorities
 //! - Parallel event processing
@@ -14,12 +14,12 @@
 //! - State checkpointing
 //! - Performance metrics
 //! - OpenTelemetry integration
-//! 
+//!
 //! # Examples
 //! ```no_run
 //! use gausstwin_des::{DiscreteEventSimulator, SimulationConfig, Event, Priority};
 //! use gausstwin_des::SimulationError;
-//! 
+//!
 //! async fn example() -> Result<(), SimulationError> {
 //!     let config = SimulationConfig {
 //!         max_time: 100.0,
@@ -42,9 +42,9 @@ use crossbeam::queue::SegQueue;
 use dashmap::DashMap;
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
+use ordered_float::OrderedFloat;
 use parking_lot::RwLock;
 use priority_queue::PriorityQueue;
-use ordered_float::OrderedFloat;
 use serde::{Deserialize, Serialize};
 use std::{
     cmp::Ordering,
@@ -172,7 +172,11 @@ impl SimulationError {
     }
 
     /// Create a new event error
-    pub fn event_error(kind: EventErrorKind, message: impl Into<String>, event_id: Option<Uuid>) -> Self {
+    pub fn event_error(
+        kind: EventErrorKind,
+        message: impl Into<String>,
+        event_id: Option<Uuid>,
+    ) -> Self {
         SimulationError::Event {
             kind,
             message: message.into(),
@@ -329,7 +333,10 @@ impl EventQueue {
 
     pub fn schedule_event(&self, event: Event) -> Result<(), SimulationError> {
         if event.time < 0.0 {
-            return Err(SimulationError::time_error(TimeErrorKind::InvalidValue, "Event time cannot be negative"));
+            return Err(SimulationError::time_error(
+                TimeErrorKind::InvalidValue,
+                "Event time cannot be negative",
+            ));
         }
 
         let mut queue = self.queue.write();
@@ -341,14 +348,19 @@ impl EventQueue {
 
         stats.total_events += 1;
         stats.pending_events += 1;
-        *stats.priority_distribution.entry(event_priority).or_insert(0) += 1;
+        *stats
+            .priority_distribution
+            .entry(event_priority)
+            .or_insert(0) += 1;
 
         Ok(())
     }
 
     pub fn peek_next_event(&self) -> Option<Event> {
         let queue = self.queue.read();
-        queue.peek().map(|(id, _)| self.events.get(id).unwrap().clone())
+        queue
+            .peek()
+            .map(|(id, _)| self.events.get(id).unwrap().clone())
     }
 
     pub fn pop_next_event(&self) -> Option<Event> {
@@ -375,10 +387,17 @@ impl EventQueue {
         if let Some((_, event)) = self.events.remove(&event_id) {
             queue.remove(&event_id);
             stats.pending_events -= 1;
-            *stats.priority_distribution.entry(event.priority).or_insert(0) -= 1;
+            *stats
+                .priority_distribution
+                .entry(event.priority)
+                .or_insert(0) -= 1;
             Ok(())
         } else {
-            Err(SimulationError::event_error(EventErrorKind::NotFound, format!("Event {} not found", event_id), Some(event_id)))
+            Err(SimulationError::event_error(
+                EventErrorKind::NotFound,
+                format!("Event {} not found", event_id),
+                Some(event_id),
+            ))
         }
     }
 
@@ -396,7 +415,7 @@ impl EventQueue {
             let permit = self.semaphore.clone().acquire_owned().await.unwrap();
             let event_clone = event.clone();
             let processor = Arc::clone(&processor);
-            
+
             futures.push(tokio::spawn(async move {
                 let result = (processor)(event_clone);
                 drop(permit);
@@ -472,20 +491,25 @@ impl DiscreteEventSimulator {
             current_time: Arc::new(RwLock::new(0.0)),
             event_queue: EventQueue::new(config.max_concurrent_events),
             config,
-            state_history: Arc::new(RwLock::new(BTreeMap::<OrderedFloat<f64>, serde_json::Value>::new())),
+            state_history: Arc::new(RwLock::new(
+                BTreeMap::<OrderedFloat<f64>, serde_json::Value>::new(),
+            )),
             checkpoints: Arc::new(RwLock::new(BTreeMap::new())),
             time_warp_state: Arc::new(RwLock::new(TimeWarpState::default())),
             rollback_count: Arc::new(RwLock::new(0)),
         }
     }
-    
+
     pub fn enable_time_warp(&self, rollback_window: f64) {
         let mut time_warp = self.time_warp_state.write();
         time_warp.enabled = true;
         time_warp.rollback_window = rollback_window;
-        info!("Time warp enabled with rollback window of {}", rollback_window);
+        info!(
+            "Time warp enabled with rollback window of {}",
+            rollback_window
+        );
     }
-    
+
     pub fn disable_time_warp(&self) {
         let mut time_warp = self.time_warp_state.write();
         time_warp.enabled = false;
@@ -518,18 +542,37 @@ impl DiscreteEventSimulator {
                     .process_parallel_events(move |event| {
                         // Directly process the event without borrowing `self`.
                         match &event.data {
-                            EventData::AgentAction { agent_id, action, parameters: _ } => {
+                            EventData::AgentAction {
+                                agent_id,
+                                action,
+                                parameters: _,
+                            } => {
                                 info!("Processing agent action: {} for agent {}", action, agent_id);
                             }
-                            EventData::StateChange { entity_id, state, value } => {
+                            EventData::StateChange {
+                                entity_id,
+                                state,
+                                value,
+                            } => {
                                 let mut history = state_history.write();
                                 history.insert(OrderedFloat(event.time), value.clone());
                                 info!("State change for entity {}: {}", entity_id, state);
                             }
-                            EventData::Interaction { source_id, target_id, interaction_type, data: _ } => {
-                                info!("Processing interaction {} between {} and {}", interaction_type, source_id, target_id);
+                            EventData::Interaction {
+                                source_id,
+                                target_id,
+                                interaction_type,
+                                data: _,
+                            } => {
+                                info!(
+                                    "Processing interaction {} between {} and {}",
+                                    interaction_type, source_id, target_id
+                                );
                             }
-                            EventData::SystemEvent { event_type, data: _ } => {
+                            EventData::SystemEvent {
+                                event_type,
+                                data: _,
+                            } => {
                                 info!("Processing system event: {}", event_type);
                             }
                         }
@@ -560,20 +603,33 @@ impl DiscreteEventSimulator {
 
     fn process_event(&self, event: Event) -> Result<(), SimulationError> {
         match &event.data {
-            EventData::AgentAction { agent_id, action, .. } => {
+            EventData::AgentAction {
+                agent_id, action, ..
+            } => {
                 // Process agent action
                 info!("Processing agent action: {} for agent {}", action, agent_id);
             }
-            EventData::StateChange { entity_id, state, value } => {
+            EventData::StateChange {
+                entity_id,
+                state,
+                value,
+            } => {
                 // Update state history
                 let mut history = self.state_history.write();
                 history.insert(OrderedFloat(event.time), value.clone());
                 info!("State change for entity {}: {}", entity_id, state);
             }
-            EventData::Interaction { source_id, target_id, interaction_type, .. } => {
+            EventData::Interaction {
+                source_id,
+                target_id,
+                interaction_type,
+                ..
+            } => {
                 // Handle interaction between entities
-                info!("Processing interaction {} between {} and {}", 
-                    interaction_type, source_id, target_id);
+                info!(
+                    "Processing interaction {} between {} and {}",
+                    interaction_type, source_id, target_id
+                );
             }
             EventData::SystemEvent { event_type, .. } => {
                 // Handle system-level events
@@ -586,53 +642,60 @@ impl DiscreteEventSimulator {
 
     fn create_checkpoint(&self) -> Result<(), SimulationError> {
         let time = self.current_time();
-        
+
         // Collect all pending events
         let pending_events: Vec<Event> = {
             let queue = self.event_queue.queue.read();
             let events = &self.event_queue.events;
-            queue.iter()
+            queue
+                .iter()
                 .filter_map(|(id, _)| events.get(id).map(|e| e.clone()))
                 .collect()
         };
-        
+
         let checkpoint_id = Uuid::new_v4();
         let checkpoint = Checkpoint {
             id: checkpoint_id,
             time,
             timestamp: Utc::now(),
             events: self.event_queue.get_stats(),
-            state: self.state_history.read()
+            state: self
+                .state_history
+                .read()
                 .iter()
                 .map(|(k, v)| (k.to_string(), v.clone()))
                 .collect(),
             pending_events,
         };
-        
+
         let mut checkpoints = self.checkpoints.write();
         checkpoints.insert(OrderedFloat(time), checkpoint);
-        
+
         // Keep only recent checkpoints (last 10)
         if checkpoints.len() > 10 {
             if let Some(&oldest_time) = checkpoints.keys().next() {
                 checkpoints.remove(&oldest_time);
             }
         }
-        
+
         info!("Created checkpoint {} at time {}", checkpoint_id, time);
         Ok(())
     }
-    
+
     pub fn rollback_to_time(&self, target_time: f64) -> Result<(), SimulationError> {
         if target_time > self.current_time() {
             return Err(SimulationError::state_error(
                 StateErrorKind::RollbackError,
-                format!("Cannot rollback to future time: {}", target_time)
+                format!("Cannot rollback to future time: {}", target_time),
             ));
         }
-        
-        info!("Rolling back from {} to {}", self.current_time(), target_time);
-        
+
+        info!(
+            "Rolling back from {} to {}",
+            self.current_time(),
+            target_time
+        );
+
         // Find the checkpoint at or before target_time
         let checkpoint = {
             let checkpoints = self.checkpoints.read();
@@ -643,14 +706,14 @@ impl DiscreteEventSimulator {
                 .ok_or_else(|| {
                     SimulationError::state_error(
                         StateErrorKind::CheckpointError,
-                        format!("No checkpoint found at or before time {}", target_time)
+                        format!("No checkpoint found at or before time {}", target_time),
                     )
                 })?
         };
-        
+
         // Restore state from checkpoint
         *self.current_time.write() = checkpoint.time;
-        
+
         // Restore state history
         {
             let mut history = self.state_history.write();
@@ -661,27 +724,27 @@ impl DiscreteEventSimulator {
                 }
             }
         }
-        
+
         // Clear and restore event queue
         {
             let mut queue = self.event_queue.queue.write();
             queue.clear();
             self.event_queue.events.clear();
-            
+
             for event in checkpoint.pending_events {
                 if event.time >= target_time {
                     self.event_queue.schedule_event(event)?;
                 }
             }
         }
-        
+
         // Update rollback count
         *self.rollback_count.write() += 1;
-        
+
         info!("Rollback completed to time {}", target_time);
         Ok(())
     }
-    
+
     pub fn rollback_to_checkpoint(&self, checkpoint_id: Uuid) -> Result<(), SimulationError> {
         let checkpoint = {
             let checkpoints = self.checkpoints.read();
@@ -692,35 +755,37 @@ impl DiscreteEventSimulator {
                 .ok_or_else(|| {
                     SimulationError::state_error(
                         StateErrorKind::CheckpointError,
-                        format!("Checkpoint {} not found", checkpoint_id)
+                        format!("Checkpoint {} not found", checkpoint_id),
                     )
                 })?
         };
-        
+
         self.rollback_to_time(checkpoint.time)
     }
-    
+
     pub fn list_checkpoints(&self) -> Vec<Checkpoint> {
         let checkpoints = self.checkpoints.read();
         checkpoints.values().cloned().collect()
     }
-    
+
     pub fn get_rollback_count(&self) -> u64 {
         *self.rollback_count.read()
     }
-    
+
     pub fn process_with_time_warp(&self, event: Event) -> Result<(), SimulationError> {
         let mut time_warp = self.time_warp_state.write();
-        
+
         if !time_warp.enabled {
             return self.process_event(event);
         }
-        
+
         // Check if event time is in the past (causality violation)
         if event.time < time_warp.local_virtual_time {
-            warn!("Causality violation detected: event at {} < LVT {}", 
-                  event.time, time_warp.local_virtual_time);
-            
+            warn!(
+                "Causality violation detected: event at {} < LVT {}",
+                event.time, time_warp.local_virtual_time
+            );
+
             // Send anti-message if this was caused by a previous event
             if let Some(previous_event_id) = event.causality_chain.last() {
                 let anti_event = Event {
@@ -743,43 +808,46 @@ impl DiscreteEventSimulator {
                     timeout: None,
                     rollback_handler: event.rollback_handler.clone(),
                 };
-                
+
                 time_warp.anti_messages.insert(event.id, anti_event);
             }
-            
+
             // Rollback to before the violating event
             let rollback_time = (event.time - time_warp.rollback_window).max(0.0);
             drop(time_warp); // Release lock before rollback
             self.rollback_to_time(rollback_time)?;
-            
+
             // Re-acquire lock
             let mut time_warp = self.time_warp_state.write();
             time_warp.local_virtual_time = rollback_time;
-            
+
             return Ok(());
         }
-        
+
         // Update local virtual time
         time_warp.local_virtual_time = event.time;
-        
-            // Check for anti-message cancellation
-            if let Some(_anti_event) = time_warp.anti_messages.remove(&event.id) {
-                info!("Event {} canceled by anti-message", event.id);
-                return Ok(());
-            }
-        
+
+        // Check for anti-message cancellation
+        if let Some(_anti_event) = time_warp.anti_messages.remove(&event.id) {
+            info!("Event {} canceled by anti-message", event.id);
+            return Ok(());
+        }
+
         // Process event normally
         drop(time_warp); // Release lock before processing
         self.process_event(event)
     }
-    
+
     pub fn get_time_warp_state(&self) -> TimeWarpState {
         self.time_warp_state.read().clone()
     }
 
     pub fn schedule_event(&self, event: Event) -> Result<(), SimulationError> {
         if event.time < self.current_time() {
-            return Err(SimulationError::time_error(TimeErrorKind::CausalityViolation, "Cannot schedule events in the past"));
+            return Err(SimulationError::time_error(
+                TimeErrorKind::CausalityViolation,
+                "Cannot schedule events in the past",
+            ));
         }
         self.event_queue.schedule_event(event)
     }
@@ -904,7 +972,7 @@ mod tests {
         assert_eq!(stats.processed_events, 10);
         assert!(stats.events_per_second > 0.0);
     }
-    
+
     #[tokio::test]
     async fn test_checkpointing() {
         let config = SimulationConfig {
@@ -915,9 +983,9 @@ mod tests {
             checkpoint_interval: Some(StdDuration::from_millis(100)),
             metrics_enabled: true,
         };
-        
+
         let simulator = DiscreteEventSimulator::new(config);
-        
+
         // Schedule events
         for i in 0..5 {
             let event = Event {
@@ -940,19 +1008,19 @@ mod tests {
             };
             simulator.schedule_event(event).unwrap();
         }
-        
+
         // Run simulation
         simulator.run().await.unwrap();
-        
+
         // Check that checkpoints were created
         let checkpoints = simulator.list_checkpoints();
         assert!(!checkpoints.is_empty());
-        
+
         // Verify checkpoint contains state
         let last_checkpoint = checkpoints.last().unwrap();
         assert!(!last_checkpoint.state.is_empty());
     }
-    
+
     #[tokio::test]
     async fn test_rollback() {
         let config = SimulationConfig {
@@ -963,9 +1031,9 @@ mod tests {
             checkpoint_interval: None,
             metrics_enabled: true,
         };
-        
+
         let simulator = DiscreteEventSimulator::new(config);
-        
+
         // Schedule events
         for i in 0..5 {
             let event = Event {
@@ -988,22 +1056,22 @@ mod tests {
             };
             simulator.schedule_event(event).unwrap();
         }
-        
+
         // Run partially
         simulator.run().await.unwrap();
-        
+
         // Create a checkpoint at current time
         simulator.create_checkpoint().unwrap();
         let checkpoints = simulator.list_checkpoints();
         assert_eq!(checkpoints.len(), 1);
-        
+
         // Rollback
         let checkpoint_id = checkpoints[0].id;
         simulator.rollback_to_checkpoint(checkpoint_id).unwrap();
-        
+
         assert_eq!(simulator.get_rollback_count(), 1);
     }
-    
+
     #[tokio::test]
     async fn test_time_warp() {
         let config = SimulationConfig {
@@ -1014,10 +1082,10 @@ mod tests {
             checkpoint_interval: None,
             metrics_enabled: true,
         };
-        
+
         let simulator = DiscreteEventSimulator::new(config);
         simulator.enable_time_warp(5.0);
-        
+
         // Schedule events in order
         for i in 0..3 {
             let event = Event {
@@ -1040,7 +1108,7 @@ mod tests {
             };
             simulator.schedule_event(event).unwrap();
         }
-        
+
         // Verify time warp is enabled
         let time_warp_state = simulator.get_time_warp_state();
         assert!(time_warp_state.enabled);

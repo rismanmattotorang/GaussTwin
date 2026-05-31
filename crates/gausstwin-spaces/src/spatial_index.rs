@@ -4,11 +4,11 @@ use crate::{
     Point,
 };
 use dashmap::DashMap;
-use kdtree::{KdTree, distance::squared_euclidean};
+use kdtree::{distance::squared_euclidean, KdTree};
 use parking_lot::RwLock;
 use rayon::prelude::*;
 use rstar::{RTree, RTreeObject, AABB};
-use smallvec::{SmallVec, smallvec};
+use smallvec::{smallvec, SmallVec};
 use std::{
     collections::HashMap,
     sync::Arc,
@@ -99,9 +99,15 @@ impl OctreeNode {
             let p: Point = point.position.into();
             let idx = {
                 let mut index = 0;
-                if p.x >= self.center.x { index |= 1; }
-                if p.y >= self.center.y { index |= 2; }
-                if p.z >= self.center.z { index |= 4; }
+                if p.x >= self.center.x {
+                    index |= 1;
+                }
+                if p.y >= self.center.y {
+                    index |= 2;
+                }
+                if p.z >= self.center.z {
+                    index |= 4;
+                }
                 index
             };
             children[idx].points.push(point);
@@ -120,9 +126,15 @@ impl OctreeNode {
 
     fn get_child_index(&self, point: &Point) -> usize {
         let mut index = 0;
-        if point.x >= self.center.x { index |= 1; }
-        if point.y >= self.center.y { index |= 2; }
-        if point.z >= self.center.z { index |= 4; }
+        if point.x >= self.center.x {
+            index |= 1;
+        }
+        if point.y >= self.center.y {
+            index |= 2;
+        }
+        if point.z >= self.center.z {
+            index |= 4;
+        }
         index
     }
 
@@ -228,9 +240,7 @@ impl SpatialIndex {
                 let cell_x = (point.x / cell_size).floor() as i64;
                 let cell_y = (point.y / cell_size).floor() as i64;
                 let cell_z = (point.z / cell_size).floor() as i64;
-                cells.entry((cell_x, cell_y, cell_z))
-                    .or_default()
-                    .push(id);
+                cells.entry((cell_x, cell_y, cell_z)).or_default().push(id);
             }
             Self::RTree(tree) => {
                 let mut tree = tree.write();
@@ -255,11 +265,13 @@ impl SpatialIndex {
         match self {
             Self::KdTree(tree) => {
                 let tree = tree.read();
-                let hits = tree.within(&[center.x, center.y, center.z], radius * radius, &squared_euclidean);
+                let hits = tree.within(
+                    &[center.x, center.y, center.z],
+                    radius * radius,
+                    &squared_euclidean,
+                );
                 hits.into_iter()
-                    .flat_map(|inner| {
-                        inner.into_iter().map(|(_, id)| *id)
-                    })
+                    .flat_map(|inner| inner.into_iter().map(|(_, id)| *id))
                     .collect::<Vec<_>>()
             }
             Self::GridHash { cell_size, cells } => {
@@ -280,10 +292,12 @@ impl SpatialIndex {
                 for dx in -cell_radius..=cell_radius {
                     for dy in -cell_radius..=cell_radius {
                         for dz in -cell_radius..=cell_radius {
-                            if let Some(cell) = cells.get(&(center_x + dx, center_y + dy, center_z + dz)) {
+                            if let Some(cell) =
+                                cells.get(&(center_x + dx, center_y + dy, center_z + dz))
+                            {
                                 let points = cell.value();
                                 let chunks = points.chunks(4);
-                                
+
                                 for chunk in chunks {
                                     let mut positions = [[0.0; 4]; 3];
                                     for (i, &id) in chunk.iter().enumerate() {
@@ -305,7 +319,8 @@ impl SpatialIndex {
                                     let dy_simd = y_simd - center_y_simd;
                                     let dz_simd = z_simd - center_z_simd;
 
-                                    let dist_sq_simd = dx_simd * dx_simd + dy_simd * dy_simd + dz_simd * dz_simd;
+                                    let dist_sq_simd =
+                                        dx_simd * dx_simd + dy_simd * dy_simd + dz_simd * dz_simd;
                                     let mask = dist_sq_simd.simd_le(radius_sq_simd);
 
                                     for (i, &id) in chunk.iter().enumerate() {
@@ -375,9 +390,7 @@ impl SpatialIndex {
                     let cell_x = (point.x / cell_size).floor() as i64;
                     let cell_y = (point.y / cell_size).floor() as i64;
                     let cell_z = (point.z / cell_size).floor() as i64;
-                    cells.entry((cell_x, cell_y, cell_z))
-                        .or_default()
-                        .push(id);
+                    cells.entry((cell_x, cell_y, cell_z)).or_default().push(id);
                 });
             }
             Self::RTree(tree_lock) => {

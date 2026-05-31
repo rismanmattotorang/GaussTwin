@@ -1,11 +1,11 @@
 //! Error types for the gausstwin-data crate
 
+use gausstwin_vec::VectorError as CrateVectorError;
+use serde_json::Error as JsonError;
+use std::error::Error as StdError;
 use std::fmt;
 use thiserror::Error;
 use uuid::Error as UuidError;
-use serde_json::Error as JsonError;
-use gausstwin_vec::VectorError as CrateVectorError;
-use std::error::Error as StdError;
 use validator::ValidationErrors;
 
 /// Comprehensive error type for data operations
@@ -27,10 +27,7 @@ pub enum DataError {
     Cache(String),
 
     /// Not found errors
-    NotFound {
-        kind: ResourceKind,
-        key: String,
-    },
+    NotFound { kind: ResourceKind, key: String },
 
     /// Rate limiting errors
     RateLimit(String),
@@ -75,10 +72,15 @@ impl fmt::Display for DataError {
             DataError::Vector(err) => write!(f, "Vector error: {}", err),
             DataError::Pool(err) => write!(f, "Pool error: {}", err),
             DataError::Other(msg) => write!(f, "Other error: {}", msg),
-            DataError::NotFound { kind, key } => write!(f, "Resource not found: {} with key {}", kind, key),
+            DataError::NotFound { kind, key } => {
+                write!(f, "Resource not found: {} with key {}", kind, key)
+            }
             DataError::RateLimit(msg) => write!(f, "Rate limit exceeded: {}", msg),
             DataError::Config(msg) => write!(f, "Config error: {}", msg),
-            DataError::Timeout { duration_secs, operation } => write!(f, "Operation timed out after {} seconds", duration_secs),
+            DataError::Timeout {
+                duration_secs,
+                operation,
+            } => write!(f, "Operation timed out after {} seconds", duration_secs),
             DataError::Consistency(msg) => write!(f, "Consistency error: {}", msg),
             DataError::Query(msg) => write!(f, "Query error: {}", msg),
             DataError::Internal(msg) => write!(f, "Internal error: {}", msg),
@@ -222,8 +224,14 @@ impl fmt::Display for PoolError {
             PoolError::InvalidConnection(msg) => write!(f, "Invalid connection: {}", msg),
             PoolError::NoAvailableConnections => write!(f, "No available connections in pool"),
             PoolError::Other(msg) => write!(f, "Other pool error: {}", msg),
-            PoolError::InitializationFailed(msg) => write!(f, "Pool initialization failed: {}", msg),
-            PoolError::AcquisitionTimeout(duration_secs) => write!(f, "Connection acquisition timeout after {} seconds", duration_secs),
+            PoolError::InitializationFailed(msg) => {
+                write!(f, "Pool initialization failed: {}", msg)
+            }
+            PoolError::AcquisitionTimeout(duration_secs) => write!(
+                f,
+                "Connection acquisition timeout after {} seconds",
+                duration_secs
+            ),
             PoolError::ValidationFailed(msg) => write!(f, "Connection validation failed: {}", msg),
             PoolError::ConnectionClosed(msg) => write!(f, "Connection closed: {}", msg),
             PoolError::PoolFull => write!(f, "Pool is full"),
@@ -328,4 +336,4 @@ impl From<JsonError> for DataError {
     fn from(err: JsonError) -> Self {
         DataError::Serialization(err)
     }
-} 
+}

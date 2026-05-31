@@ -1,6 +1,6 @@
-use serde::{Serialize, Deserialize};
-use std::collections::HashMap;
 use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use uuid::Uuid;
 
 pub type ScenarioId = Uuid;
@@ -101,15 +101,17 @@ impl ScenarioManager {
     }
 
     pub async fn analyze_scenario(&self, id: ScenarioId) -> crate::Result<ScenarioResults> {
-        let scenario = self.scenarios.get(&id)
+        let scenario = self
+            .scenarios
+            .get(&id)
             .ok_or_else(|| crate::Error::Scenario("Scenario not found".into()))?;
-        
+
         // Perform Monte Carlo simulation
         let outcomes = self.run_monte_carlo(&scenario.config)?;
-        
+
         // Generate recommendations based on simulation results
         let recommendations = self.generate_recommendations(&outcomes)?;
-        
+
         let results = ScenarioResults {
             id,
             config: scenario.config.clone(),
@@ -117,38 +119,30 @@ impl ScenarioManager {
             recommendations,
             created_at: Utc::now(),
         };
-        
+
         Ok(results)
     }
 
     fn run_monte_carlo(&self, config: &ScenarioConfig) -> crate::Result<Vec<Outcome>> {
         let mut outcomes = Vec::new();
         let num_simulations = 1000; // Configurable
-        
+
         for _ in 0..num_simulations {
             // Generate random variable values within constraints
             let variable_values = self.generate_variable_values(&config.variables)?;
-            
+
             // Evaluate objectives
-            let objective_values = self.evaluate_objectives(
-                &variable_values,
-                &config.objectives,
-                &config.base_data,
-            )?;
-            
+            let objective_values =
+                self.evaluate_objectives(&variable_values, &config.objectives, &config.base_data)?;
+
             // Check constraints
-            let constraints_satisfied = self.check_constraints(
-                &variable_values,
-                &config.constraints,
-            )?;
-            
+            let constraints_satisfied =
+                self.check_constraints(&variable_values, &config.constraints)?;
+
             // Calculate probability based on historical data and model predictions
-            let probability = self.calculate_probability(
-                &variable_values,
-                &objective_values,
-                &config.base_data,
-            )?;
-            
+            let probability =
+                self.calculate_probability(&variable_values, &objective_values, &config.base_data)?;
+
             outcomes.push(Outcome {
                 variable_values,
                 objective_values,
@@ -156,7 +150,7 @@ impl ScenarioManager {
                 probability,
             });
         }
-        
+
         Ok(outcomes)
     }
 
@@ -165,12 +159,12 @@ impl ScenarioManager {
         variables: &[Variable],
     ) -> crate::Result<HashMap<String, f64>> {
         let mut values = HashMap::new();
-        
+
         for var in variables {
             let value = self.generate_random_value(var.range.0, var.range.1);
             values.insert(var.name.clone(), value);
         }
-        
+
         Ok(values)
     }
 
@@ -181,12 +175,12 @@ impl ScenarioManager {
         base_data: &[f64],
     ) -> crate::Result<HashMap<String, f64>> {
         let mut values = HashMap::new();
-        
+
         for obj in objectives {
             let value = self.evaluate_expression(&obj.expression, variable_values, base_data)?;
             values.insert(obj.name.clone(), value);
         }
-        
+
         Ok(values)
     }
 
@@ -196,17 +190,13 @@ impl ScenarioManager {
         constraints: &[Constraint],
     ) -> crate::Result<bool> {
         for constraint in constraints {
-            let value = self.evaluate_expression(
-                &constraint.expression,
-                variable_values,
-                &[],
-            )?;
-            
+            let value = self.evaluate_expression(&constraint.expression, variable_values, &[])?;
+
             if value > constraint.bound {
                 return Ok(false);
             }
         }
-        
+
         Ok(true)
     }
 
@@ -234,12 +224,9 @@ impl ScenarioManager {
         min + (max - min) * rand::random::<f64>()
     }
 
-    fn generate_recommendations(
-        &self,
-        outcomes: &[Outcome],
-    ) -> crate::Result<Vec<Recommendation>> {
+    fn generate_recommendations(&self, outcomes: &[Outcome]) -> crate::Result<Vec<Recommendation>> {
         let mut recommendations = Vec::new();
-        
+
         // Analyze outcomes and generate recommendations
         if let Some(best_outcome) = self.find_best_outcome(outcomes) {
             recommendations.push(Recommendation {
@@ -249,20 +236,22 @@ impl ScenarioManager {
                 confidence: best_outcome.probability,
             });
         }
-        
+
         // Generate risk mitigation recommendations
         if let Some(risk_rec) = self.generate_risk_recommendation(outcomes) {
             recommendations.push(risk_rec);
         }
-        
+
         Ok(recommendations)
     }
 
     fn find_best_outcome<'a>(&self, outcomes: &'a [Outcome]) -> Option<&'a Outcome> {
-        outcomes.iter()
+        outcomes
+            .iter()
             .filter(|o| o.constraints_satisfied)
             .max_by(|a, b| {
-                a.probability.partial_cmp(&b.probability)
+                a.probability
+                    .partial_cmp(&b.probability)
                     .unwrap_or(std::cmp::Ordering::Equal)
             })
     }
@@ -271,4 +260,4 @@ impl ScenarioManager {
         // TODO: Implement risk-based recommendation generation
         None
     }
-} 
+}

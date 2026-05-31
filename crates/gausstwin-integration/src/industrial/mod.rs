@@ -1,6 +1,6 @@
 //! Industrial integration module stub
 
-// Add industrial integration logic here in the future. 
+// Add industrial integration logic here in the future.
 
+pub mod bacnet;
 pub mod s7;
-pub mod bacnet; 

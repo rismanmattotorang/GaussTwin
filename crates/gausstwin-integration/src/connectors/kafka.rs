@@ -575,8 +575,14 @@ impl KafkaConnector {
                 0
             },
             connection_failures: 0,
-            messages_sent: self.internal_metrics.messages_produced.load(Ordering::Relaxed),
-            messages_received: self.internal_metrics.messages_consumed.load(Ordering::Relaxed),
+            messages_sent: self
+                .internal_metrics
+                .messages_produced
+                .load(Ordering::Relaxed),
+            messages_received: self
+                .internal_metrics
+                .messages_consumed
+                .load(Ordering::Relaxed),
             errors: self.internal_metrics.produce_errors.load(Ordering::Relaxed)
                 + self.internal_metrics.consume_errors.load(Ordering::Relaxed),
             average_latency_ms: avg_produce_latency,
@@ -683,7 +689,10 @@ mod tests {
     async fn test_kafka_config_default() {
         let config = KafkaConfig::default();
         assert!(!config.bootstrap_servers.is_empty());
-        assert!(matches!(config.security_protocol, SecurityProtocol::Plaintext));
+        assert!(matches!(
+            config.security_protocol,
+            SecurityProtocol::Plaintext
+        ));
         assert!(config.enable_idempotence);
     }
 

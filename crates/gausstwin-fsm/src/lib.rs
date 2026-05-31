@@ -1,5 +1,5 @@
 //! GaussTwin Finite State Machine and System Dynamics
-//! 
+//!
 //! A comprehensive library for finite state machines and system dynamics modeling with features including:
 //! - Hierarchical state machines
 //! - Guard conditions and actions
@@ -7,18 +7,18 @@
 //! - State history tracking
 //! - Visualization support
 //! - Metrics collection
-//! 
+//!
 //! # Features
 //! - Finite state machines with guards and actions
 //! - System dynamics with flows and stocks
 //! - State history and metrics
 //! - Visualization (DOT and Mermaid)
 //! - Observable state changes
-//! 
+//!
 //! # Examples
 //! ```no_run
 //! use gausstwin_fsm::{FiniteStateMachine, State, Signal, StateMachine};
-//! 
+//!
 //! fn example() -> Result<(), FsmError> {
 //!     let initial = State {
 //!         id: 0,
@@ -41,7 +41,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use dashmap::DashMap;
-use parking_lot::{RwLock, Mutex};
+use parking_lot::{Mutex, RwLock};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::broadcast;
@@ -139,7 +139,11 @@ pub enum DynamicsErrorKind {
 
 impl FsmError {
     /// Create a new state error
-    pub fn state_error(kind: StateErrorKind, message: impl Into<String>, state_id: Option<StateId>) -> Self {
+    pub fn state_error(
+        kind: StateErrorKind,
+        message: impl Into<String>,
+        state_id: Option<StateId>,
+    ) -> Self {
         FsmError::State {
             kind,
             message: message.into(),
@@ -148,7 +152,11 @@ impl FsmError {
     }
 
     /// Create a new transition error
-    pub fn transition_error(kind: TransitionErrorKind, message: impl Into<String>, transition_id: Option<TransitionId>) -> Self {
+    pub fn transition_error(
+        kind: TransitionErrorKind,
+        message: impl Into<String>,
+        transition_id: Option<TransitionId>,
+    ) -> Self {
         FsmError::Transition {
             kind,
             message: message.into(),
@@ -225,7 +233,7 @@ impl State {
             initial_substate: None,
         }
     }
-    
+
     /// Create a composite state (can contain substates)
     pub fn composite(id: StateId, name: impl Into<String>, initial_substate: StateId) -> Self {
         Self {
@@ -240,25 +248,25 @@ impl State {
             initial_substate: Some(initial_substate),
         }
     }
-    
+
     /// Add a child state (for hierarchical FSM)
     pub fn with_child(mut self, child_id: StateId) -> Self {
         self.children.push(child_id);
         self
     }
-    
+
     /// Set parent state
     pub fn with_parent(mut self, parent_id: StateId) -> Self {
         self.parent = Some(parent_id);
         self
     }
-    
+
     /// Add entry action
     pub fn with_entry_action(mut self, action: ActionFn) -> Self {
         self.entry_actions.push(action);
         self
     }
-    
+
     /// Add exit action
     pub fn with_exit_action(mut self, action: ActionFn) -> Self {
         self.exit_actions.push(action);
@@ -269,7 +277,7 @@ impl State {
 // Core Traits
 pub trait StateMachine: Send + Sync {
     type Context: Send + Sync;
-    
+
     /// Get the current state ID
     fn current(&self) -> StateId;
 
@@ -303,7 +311,12 @@ pub trait SystemDynamics: Send + Sync {
     fn get_variable(&self, name: &str) -> Result<f64, FsmError>;
 
     /// Add a flow between variables
-    fn add_flow(&mut self, from: &str, to: &str, rate: Box<dyn Fn(f64) -> f64 + Send + Sync>) -> Result<(), FsmError>;
+    fn add_flow(
+        &mut self,
+        from: &str,
+        to: &str,
+        rate: Box<dyn Fn(f64) -> f64 + Send + Sync>,
+    ) -> Result<(), FsmError>;
 }
 
 // Implementation
@@ -345,53 +358,54 @@ impl<C: Send + Sync + 'static> FiniteStateMachine<C> {
     pub fn get_metrics(&self) -> Arc<DashMap<String, f64>> {
         self.metrics.clone()
     }
-    
+
     pub fn get_history(&self) -> Vec<(StateId, u64)> {
         self.history.iter().copied().collect()
     }
-    
+
     pub fn get_state(&self, id: StateId) -> Option<&State> {
         self.states.get(&id)
     }
-    
+
     pub fn get_current_state(&self) -> Option<&State> {
         self.states.get(&self.current_state)
     }
-    
+
     pub fn get_state_stack(&self) -> &[StateId] {
         &self.state_stack
     }
-    
+
     /// Get all states (for visualization)
     pub fn get_all_states(&self) -> &HashMap<StateId, State> {
         &self.states
     }
-    
+
     /// Get all transitions (for visualization)
     pub fn get_all_transitions(&self) -> Vec<(TransitionId, StateId, StateId, i32)> {
-        self.transitions.iter()
+        self.transitions
+            .iter()
             .map(|(id, t)| (*id, t.from, t.to, t.priority))
             .collect()
     }
-    
+
     /// Check if a state is active in the hierarchy
     pub fn is_state_active(&self, state_id: StateId) -> bool {
         self.state_stack.contains(&state_id)
     }
-    
+
     /// Enter a composite state
     fn enter_composite_state(&mut self, state_id: StateId, ctx: &mut C) -> Result<(), FsmError> {
         if let Some(state) = self.states.get(&state_id).cloned() {
             if state.is_composite {
                 self.state_stack.push(state_id);
-                
+
                 // Enter initial substate if defined
                 if let Some(initial_substate) = state.initial_substate {
                     // Execute entry actions
                     for action in &state.entry_actions {
                         (action)(ctx as &mut dyn Any)?;
                     }
-                    
+
                     self.current_state = initial_substate;
                     self.enter_composite_state(initial_substate, ctx)?;
                 }
@@ -399,7 +413,7 @@ impl<C: Send + Sync + 'static> FiniteStateMachine<C> {
         }
         Ok(())
     }
-    
+
     /// Exit a composite state and all its substates
     fn exit_composite_state(&mut self, state_id: StateId, ctx: &mut C) -> Result<(), FsmError> {
         // Exit all substates first
@@ -407,7 +421,7 @@ impl<C: Send + Sync + 'static> FiniteStateMachine<C> {
             if top == state_id {
                 break;
             }
-            
+
             if let Some(state) = self.states.get(&top).cloned() {
                 for action in &state.exit_actions {
                     (action)(ctx as &mut dyn Any)?;
@@ -415,7 +429,7 @@ impl<C: Send + Sync + 'static> FiniteStateMachine<C> {
             }
             self.state_stack.pop();
         }
-        
+
         // Exit the composite state itself
         if let Some(state) = self.states.get(&state_id).cloned() {
             for action in &state.exit_actions {
@@ -423,21 +437,21 @@ impl<C: Send + Sync + 'static> FiniteStateMachine<C> {
             }
         }
         self.state_stack.pop();
-        
+
         Ok(())
     }
-    
+
     /// Find the Least Common Ancestor (LCA) of two states in the hierarchy
     fn find_lca(&self, state1: StateId, state2: StateId) -> Option<StateId> {
         let mut ancestors1 = HashSet::new();
         let mut current = Some(state1);
-        
+
         // Collect all ancestors of state1
         while let Some(id) = current {
             ancestors1.insert(id);
             current = self.states.get(&id).and_then(|s| s.parent);
         }
-        
+
         // Find first common ancestor with state2
         let mut current = Some(state2);
         while let Some(id) = current {
@@ -446,7 +460,7 @@ impl<C: Send + Sync + 'static> FiniteStateMachine<C> {
             }
             current = self.states.get(&id).and_then(|s| s.parent);
         }
-        
+
         None
     }
 }
@@ -461,22 +475,22 @@ impl<C: Send + Sync + 'static> StateMachine for FiniteStateMachine<C> {
     fn transition(&mut self, input: &Signal, ctx: &mut Self::Context) -> Result<StateId, FsmError> {
         let current = self.current_state;
         let mut valid_transitions: Vec<&Transition> = Vec::new();
-        
+
         // Check transitions from current state and all parent states
         let mut check_state = Some(current);
         while let Some(state_id) = check_state {
-        for t in self.transitions.values() {
+            for t in self.transitions.values() {
                 if t.from == state_id {
-                match (t.guard)(input) {
-                    Ok(true) => valid_transitions.push(t),
-                    Ok(false) => {},
-                    Err(err) => {
-                        warn!("Guard error on transition {}: {}", t.id, err);
+                    match (t.guard)(input) {
+                        Ok(true) => valid_transitions.push(t),
+                        Ok(false) => {}
+                        Err(err) => {
+                            warn!("Guard error on transition {}: {}", t.id, err);
                         }
                     }
                 }
             }
-            
+
             // Check parent state
             check_state = self.states.get(&state_id).and_then(|s| s.parent);
         }
@@ -486,10 +500,10 @@ impl<C: Send + Sync + 'static> StateMachine for FiniteStateMachine<C> {
         if let Some(transition) = valid_transitions.first() {
             let from_state = transition.from;
             let to_state = transition.to;
-            
+
             // Find least common ancestor for hierarchical transitions
             let lca = self.find_lca(from_state, to_state);
-            
+
             // Exit from current state up to LCA
             let exit_states: Vec<StateId> = if let Some(lca_state) = lca {
                 let mut states_to_exit = vec![];
@@ -505,12 +519,12 @@ impl<C: Send + Sync + 'static> StateMachine for FiniteStateMachine<C> {
             } else {
                 vec![from_state]
             };
-            
+
             // Execute exit actions
             for &state_id in &exit_states {
                 if let Some(state) = self.states.get(&state_id) {
-                for action in &state.exit_actions {
-                    (action)(ctx as &mut dyn Any)?;
+                    for action in &state.exit_actions {
+                        (action)(ctx as &mut dyn Any)?;
                     }
                 }
             }
@@ -535,8 +549,8 @@ impl<C: Send + Sync + 'static> StateMachine for FiniteStateMachine<C> {
             // Execute entry actions
             for &state_id in &entry_states {
                 if let Some(state) = self.states.get(&state_id) {
-                for action in &state.entry_actions {
-                    (action)(ctx as &mut dyn Any)?;
+                    for action in &state.entry_actions {
+                        (action)(ctx as &mut dyn Any)?;
                     }
                 }
             }
@@ -544,7 +558,7 @@ impl<C: Send + Sync + 'static> StateMachine for FiniteStateMachine<C> {
             // Update state stack for hierarchical FSM
             self.state_stack.clear();
             self.state_stack.extend(&entry_states);
-            
+
             self.current_state = to_state;
             self.history.push_back((to_state, input.timestamp));
             if self.history.len() > 1000 {
@@ -552,13 +566,20 @@ impl<C: Send + Sync + 'static> StateMachine for FiniteStateMachine<C> {
             }
 
             // Update metrics
-            let new_total = self.metrics.get("transitions_total").map(|v| *v + 1.0).unwrap_or(1.0);
+            let new_total = self
+                .metrics
+                .get("transitions_total")
+                .map(|v| *v + 1.0)
+                .unwrap_or(1.0);
             self.metrics.insert("transitions_total".into(), new_total);
 
             // Notify observers
             let _ = self.observers.send(to_state);
 
-            info!("Transitioned from state {} to state {}", from_state, to_state);
+            info!(
+                "Transitioned from state {} to state {}",
+                from_state, to_state
+            );
             Ok(to_state)
         } else {
             Ok(current)
@@ -615,12 +636,12 @@ impl SystemDynamicsModel {
 impl SystemDynamics for SystemDynamicsModel {
     fn update(&mut self, dt: f64) -> Result<(), FsmError> {
         let mut changes = HashMap::new();
-        
+
         // Calculate all flows
         for (from, to, rate) in &self.flows {
             let current_value = self.variables.get(from).copied().unwrap_or(0.0);
             let flow_value = (rate)(current_value) * dt;
-            
+
             *changes.entry(from.clone()).or_insert(0.0) -= flow_value;
             *changes.entry(to.clone()).or_insert(0.0) += flow_value;
         }
@@ -639,7 +660,11 @@ impl SystemDynamics for SystemDynamicsModel {
         self.history.write().push((self.time, snapshot));
 
         // Update metrics
-        let new_updates = self.metrics.get("updates_total").map(|v| *v + 1.0).unwrap_or(1.0);
+        let new_updates = self
+            .metrics
+            .get("updates_total")
+            .map(|v| *v + 1.0)
+            .unwrap_or(1.0);
         self.metrics.insert("updates_total".into(), new_updates);
 
         Ok(())
@@ -656,10 +681,20 @@ impl SystemDynamics for SystemDynamicsModel {
     }
 
     fn get_variable(&self, name: &str) -> Result<f64, FsmError> {
-        self.variables.get(name).copied().ok_or_else(|| FsmError::dynamics_error(DynamicsErrorKind::VariableNotFound, format!("Variable '{}' not found", name)))
+        self.variables.get(name).copied().ok_or_else(|| {
+            FsmError::dynamics_error(
+                DynamicsErrorKind::VariableNotFound,
+                format!("Variable '{}' not found", name),
+            )
+        })
     }
 
-    fn add_flow(&mut self, from: &str, to: &str, rate: Box<dyn Fn(f64) -> f64 + Send + Sync>) -> Result<(), FsmError> {
+    fn add_flow(
+        &mut self,
+        from: &str,
+        to: &str,
+        rate: Box<dyn Fn(f64) -> f64 + Send + Sync>,
+    ) -> Result<(), FsmError> {
         self.flows.push((from.to_string(), to.to_string(), rate));
         Ok(())
     }
@@ -676,47 +711,66 @@ pub mod viz {
         dot.push_str("    rankdir=LR;\n");
         dot.push_str("    node [shape=circle];\n");
         dot.push_str("    edge [fontsize=10];\n\n");
-        
+
         let states = fsm.get_all_states();
         let transitions = fsm.get_all_transitions();
         let current_state = fsm.current();
-        
+
         // Add states
         for (id, state) in states.iter() {
-            let shape = if state.is_composite { "doublecircle" } else { "circle" };
-            let style = if *id == current_state { 
-                ", style=filled, fillcolor=lightblue" 
-            } else { 
-                "" 
+            let shape = if state.is_composite {
+                "doublecircle"
+            } else {
+                "circle"
             };
-            
+            let style = if *id == current_state {
+                ", style=filled, fillcolor=lightblue"
+            } else {
+                ""
+            };
+
             let label = if state.is_composite {
                 format!("{}\\n[composite]", state.name)
             } else {
                 state.name.clone()
             };
-            
-            writeln!(dot, "    {} [label=\"{}\", shape={}{}];", id, label, shape, style).ok();
-            
+
+            writeln!(
+                dot,
+                "    {} [label=\"{}\", shape={}{}];",
+                id, label, shape, style
+            )
+            .ok();
+
             // Add substate connections
             if state.is_composite {
                 if let Some(initial) = state.initial_substate {
-                    writeln!(dot, "    {} -> {} [style=dashed, label=\"initial\"];", id, initial).ok();
+                    writeln!(
+                        dot,
+                        "    {} -> {} [style=dashed, label=\"initial\"];",
+                        id, initial
+                    )
+                    .ok();
                 }
-                
+
                 for &child in &state.children {
-                    writeln!(dot, "    {} -> {} [style=dotted, label=\"contains\", constraint=false];", id, child).ok();
+                    writeln!(
+                        dot,
+                        "    {} -> {} [style=dotted, label=\"contains\", constraint=false];",
+                        id, child
+                    )
+                    .ok();
                 }
             }
-            
+
             // Show parent relationship
             if let Some(parent) = state.parent {
                 writeln!(dot, "    {} [label=\"{}\n↑{}\"];", id, label, parent).ok();
             }
         }
-        
+
         dot.push('\n');
-        
+
         // Add transitions
         for (trans_id, from, to, priority) in transitions {
             let label = if priority != 0 {
@@ -724,16 +778,16 @@ pub mod viz {
             } else {
                 format!("T{}", trans_id)
             };
-            
+
             writeln!(dot, "    {} -> {} [label=\"{}\"];", from, to, label).ok();
         }
-        
+
         // Add initial state indicator
         writeln!(dot, "\n    __start [shape=point];").ok();
         if let Some(initial_id) = states.keys().min() {
             writeln!(dot, "    __start -> {};", initial_id).ok();
         }
-        
+
         dot.push_str("}\n");
         dot
     }
@@ -741,52 +795,62 @@ pub mod viz {
     /// Generate Mermaid representation of FSM
     pub fn generate_mermaid<C: Send + Sync + 'static>(fsm: &FiniteStateMachine<C>) -> String {
         let mut mermaid = String::from("stateDiagram-v2\n");
-        
+
         let states = fsm.get_all_states();
         let transitions = fsm.get_all_transitions();
         let current_state = fsm.current();
-        
+
         // Add start indicator
         if let Some(initial_id) = states.keys().min() {
             writeln!(mermaid, "    [*] --> S{}", initial_id).ok();
         }
-        
+
         // Add state definitions
         for (id, state) in states.iter() {
             let state_name = format!("S{}", id);
-            
+
             if state.is_composite {
                 writeln!(mermaid, "    state \"{}\" as {} {{", state.name, state_name).ok();
-                
+
                 // Add substates
                 if let Some(initial) = state.initial_substate {
                     writeln!(mermaid, "        [*] --> S{}", initial).ok();
                 }
-                
+
                 for &child in &state.children {
                     if let Some(child_state) = states.get(&child) {
-                        writeln!(mermaid, "        state \"{}\" as S{}", child_state.name, child).ok();
+                        writeln!(
+                            mermaid,
+                            "        state \"{}\" as S{}",
+                            child_state.name, child
+                        )
+                        .ok();
                     }
                 }
-                
+
                 writeln!(mermaid, "    }}").ok();
             } else {
                 writeln!(mermaid, "    state \"{}\" as {}", state.name, state_name).ok();
             }
-            
+
             // Mark current state
             if *id == current_state {
                 writeln!(mermaid, "    {} : <<current>>", state_name).ok();
             }
-            
+
             // Add parent info
             if let Some(parent) = state.parent {
-                writeln!(mermaid, "    note right of {}: Parent: S{}", state_name, parent).ok();
+                writeln!(
+                    mermaid,
+                    "    note right of {}: Parent: S{}",
+                    state_name, parent
+                )
+                .ok();
             }
         }
-        
+
         mermaid.push('\n');
-        
+
         // Add transitions
         for (trans_id, from, to, priority) in transitions {
             let label = if priority != 0 {
@@ -794,27 +858,30 @@ pub mod viz {
             } else {
                 format!("T{}", trans_id)
             };
-            
+
             writeln!(mermaid, "    S{} --> S{} : {}", from, to, label).ok();
         }
-        
+
         mermaid
     }
-    
+
     /// Generate SVG representation using DOT
-    pub fn generate_svg<C: Send + Sync + 'static>(fsm: &FiniteStateMachine<C>) -> Result<String, FsmError> {
+    pub fn generate_svg<C: Send + Sync + 'static>(
+        fsm: &FiniteStateMachine<C>,
+    ) -> Result<String, FsmError> {
         let dot = generate_dot(fsm);
-        
+
         // In a real implementation, this would call Graphviz to render SVG
         // For now, return the DOT source wrapped
         Ok(format!("<!-- DOT source:\n{}\n-->", dot))
     }
-    
+
     /// Generate HTML visualization with interactive elements
     pub fn generate_html<C: Send + Sync + 'static>(fsm: &FiniteStateMachine<C>) -> String {
         let mermaid_src = generate_mermaid(fsm);
-        
-        format!(r#"<!DOCTYPE html>
+
+        format!(
+            r#"<!DOCTYPE html>
 <html>
 <head>
     <meta charset="UTF-8">
@@ -870,43 +937,53 @@ pub mod viz {
         </div>
     </div>
 </body>
-</html>"#, mermaid_src)
+</html>"#,
+            mermaid_src
+        )
     }
-    
+
     /// Export FSM structure to JSON
-    pub fn export_json<C: Send + Sync + 'static>(fsm: &FiniteStateMachine<C>) -> Result<String, FsmError> {
+    pub fn export_json<C: Send + Sync + 'static>(
+        fsm: &FiniteStateMachine<C>,
+    ) -> Result<String, FsmError> {
         use serde_json::json;
-        
+
         let states = fsm.get_all_states();
         let transitions = fsm.get_all_transitions();
-        
-        let states_json: Vec<_> = states.iter().map(|(id, state)| {
-            json!({
-                "id": id,
-                "name": &state.name,
-                "is_composite": state.is_composite,
-                "parent": state.parent,
-                "children": &state.children,
-                "initial_substate": state.initial_substate,
+
+        let states_json: Vec<_> = states
+            .iter()
+            .map(|(id, state)| {
+                json!({
+                    "id": id,
+                    "name": &state.name,
+                    "is_composite": state.is_composite,
+                    "parent": state.parent,
+                    "children": &state.children,
+                    "initial_substate": state.initial_substate,
+                })
             })
-        }).collect();
-        
-        let transitions_json: Vec<_> = transitions.iter().map(|(id, from, to, priority)| {
-            json!({
-                "id": id,
-                "from": from,
-                "to": to,
-                "priority": priority,
+            .collect();
+
+        let transitions_json: Vec<_> = transitions
+            .iter()
+            .map(|(id, from, to, priority)| {
+                json!({
+                    "id": id,
+                    "from": from,
+                    "to": to,
+                    "priority": priority,
+                })
             })
-        }).collect();
-        
+            .collect();
+
         let result = json!({
             "current_state": fsm.current(),
             "states": states_json,
             "transitions": transitions_json,
             "state_stack": fsm.get_state_stack(),
         });
-        
+
         serde_json::to_string_pretty(&result)
             .map_err(|e| FsmError::Internal(format!("JSON serialization error: {}", e)))
     }
@@ -922,14 +999,14 @@ mod tests {
     fn test_basic_fsm() {
         let initial = State::simple(0, "idle");
         let mut fsm = FiniteStateMachine::new(initial, ());
-        
+
         // Add states
         let active = State::simple(1, "active");
         let error = State::simple(2, "error");
-        
+
         fsm.add_state(active).unwrap();
         fsm.add_state(error).unwrap();
-        
+
         // Add transitions
         let transition = Transition {
             id: 1,
@@ -940,9 +1017,9 @@ mod tests {
             priority: 0,
             timeout: None,
         };
-        
+
         fsm.add_transition(transition).unwrap();
-        
+
         // Test transition
         let signal = Signal {
             name: "start".to_string(),
@@ -950,7 +1027,7 @@ mod tests {
             timestamp: 0,
             source: Some(0),
         };
-        
+
         let new_state = fsm.transition(&signal, &mut ()).unwrap();
         assert_eq!(new_state, 1);
         assert_eq!(fsm.current(), 1);
@@ -961,14 +1038,14 @@ mod tests {
         // Create parent state
         let parent = State::composite(0, "parent", 1);
         let mut fsm = FiniteStateMachine::new(parent, ());
-        
+
         // Add child states
         let child1 = State::simple(1, "child1").with_parent(0);
         let child2 = State::simple(2, "child2").with_parent(0);
-        
+
         fsm.add_state(child1).unwrap();
         fsm.add_state(child2).unwrap();
-        
+
         // Add transition between children
         let transition = Transition {
             id: 1,
@@ -979,42 +1056,44 @@ mod tests {
             priority: 0,
             timeout: None,
         };
-        
+
         fsm.add_transition(transition).unwrap();
-        
+
         assert_eq!(fsm.current(), 0);
     }
 
     #[test]
     fn test_system_dynamics() {
         let mut model = SystemDynamicsModel::new();
-        
+
         // Add variables
         model.add_variable("stock1", 100.0).unwrap();
         model.add_variable("stock2", 50.0).unwrap();
-        
+
         // Add flow
-        model.add_flow("stock1", "stock2", Box::new(|value| value * 0.1)).unwrap();
-        
+        model
+            .add_flow("stock1", "stock2", Box::new(|value| value * 0.1))
+            .unwrap();
+
         // Update
         model.update(1.0).unwrap();
-        
+
         // Check values
         let stock1 = model.get_variable("stock1").unwrap();
         let stock2 = model.get_variable("stock2").unwrap();
-        
+
         assert!(stock1 < 100.0);
         assert!(stock2 > 50.0);
     }
-    
+
     #[test]
     fn test_state_history() {
         let initial = State::simple(0, "s0");
         let mut fsm = FiniteStateMachine::new(initial, ());
-        
+
         fsm.add_state(State::simple(1, "s1")).unwrap();
         fsm.add_state(State::simple(2, "s2")).unwrap();
-        
+
         // Add transitions
         fsm.add_transition(Transition {
             id: 1,
@@ -1024,8 +1103,9 @@ mod tests {
             action: Arc::new(|_| Ok(())),
             priority: 0,
             timeout: None,
-        }).unwrap();
-        
+        })
+        .unwrap();
+
         fsm.add_transition(Transition {
             id: 2,
             from: 1,
@@ -1034,8 +1114,9 @@ mod tests {
             action: Arc::new(|_| Ok(())),
             priority: 0,
             timeout: None,
-        }).unwrap();
-        
+        })
+        .unwrap();
+
         // Perform transitions
         let signal1 = Signal {
             name: "test".to_string(),
@@ -1043,30 +1124,30 @@ mod tests {
             timestamp: 1,
             source: None,
         };
-        
+
         let signal2 = Signal {
             name: "test".to_string(),
             payload: vec![],
             timestamp: 2,
             source: None,
         };
-        
+
         fsm.transition(&signal1, &mut ()).unwrap();
         fsm.transition(&signal2, &mut ()).unwrap();
-        
+
         let history = fsm.get_history();
         assert_eq!(history.len(), 2);
         assert_eq!(history[0].0, 1);
         assert_eq!(history[1].0, 2);
     }
-    
+
     #[test]
     fn test_visualization_dot() {
         let initial = State::simple(0, "idle");
         let mut fsm = FiniteStateMachine::new(initial, ());
-        
+
         fsm.add_state(State::simple(1, "active")).unwrap();
-        
+
         fsm.add_transition(Transition {
             id: 1,
             from: 0,
@@ -1075,22 +1156,23 @@ mod tests {
             action: Arc::new(|_| Ok(())),
             priority: 5,
             timeout: None,
-        }).unwrap();
-        
+        })
+        .unwrap();
+
         let dot = viz::generate_dot(&fsm);
         assert!(dot.contains("digraph FSM"));
         assert!(dot.contains("idle"));
         assert!(dot.contains("active"));
         assert!(dot.contains("->"));
     }
-    
+
     #[test]
     fn test_visualization_mermaid() {
         let initial = State::simple(0, "idle");
         let mut fsm = FiniteStateMachine::new(initial, ());
-        
+
         fsm.add_state(State::simple(1, "active")).unwrap();
-        
+
         fsm.add_transition(Transition {
             id: 1,
             from: 0,
@@ -1099,48 +1181,51 @@ mod tests {
             action: Arc::new(|_| Ok(())),
             priority: 0,
             timeout: None,
-        }).unwrap();
-        
+        })
+        .unwrap();
+
         let mermaid = viz::generate_mermaid(&fsm);
         assert!(mermaid.contains("stateDiagram-v2"));
         assert!(mermaid.contains("idle"));
         assert!(mermaid.contains("active"));
     }
-    
+
     #[test]
     fn test_composite_state_visualization() {
         let parent = State::composite(0, "parent", 1);
         let mut fsm = FiniteStateMachine::new(parent, ());
-        
-        fsm.add_state(State::simple(1, "child1").with_parent(0)).unwrap();
-        fsm.add_state(State::simple(2, "child2").with_parent(0)).unwrap();
-        
+
+        fsm.add_state(State::simple(1, "child1").with_parent(0))
+            .unwrap();
+        fsm.add_state(State::simple(2, "child2").with_parent(0))
+            .unwrap();
+
         let dot = viz::generate_dot(&fsm);
         assert!(dot.contains("composite"));
         assert!(dot.contains("child1"));
         assert!(dot.contains("child2"));
     }
-    
+
     #[test]
     fn test_json_export() {
         let initial = State::simple(0, "idle");
         let mut fsm = FiniteStateMachine::new(initial, ());
-        
+
         fsm.add_state(State::simple(1, "active")).unwrap();
-        
+
         let json = viz::export_json(&fsm).unwrap();
         assert!(json.contains("\"id\": 0"));
         assert!(json.contains("\"name\": \"idle\""));
         assert!(json.contains("\"current_state\""));
     }
-    
+
     #[test]
     fn test_metrics() {
         let initial = State::simple(0, "s0");
         let mut fsm = FiniteStateMachine::new(initial, ());
-        
+
         fsm.add_state(State::simple(1, "s1")).unwrap();
-        
+
         fsm.add_transition(Transition {
             id: 1,
             from: 0,
@@ -1149,17 +1234,18 @@ mod tests {
             action: Arc::new(|_| Ok(())),
             priority: 0,
             timeout: None,
-        }).unwrap();
-        
+        })
+        .unwrap();
+
         let signal = Signal {
             name: "test".to_string(),
             payload: vec![],
             timestamp: 0,
             source: None,
         };
-        
+
         fsm.transition(&signal, &mut ()).unwrap();
-        
+
         let metrics = fsm.get_metrics();
         assert_eq!(*metrics.get("transitions_total").unwrap(), 1.0);
     }

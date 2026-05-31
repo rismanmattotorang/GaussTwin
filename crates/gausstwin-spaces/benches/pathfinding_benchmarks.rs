@@ -1,6 +1,6 @@
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use gausstwin_spaces::pathfinding::{
-    algorithms::{AStar, AStarConfig, RRT, RRTConfig},
+    algorithms::{AStar, AStarConfig, RRTConfig, RRT},
     traits::{CollisionChecker, CostFunction, PathFinder},
     Point,
 };
@@ -212,4 +212,4 @@ criterion_group!(
     benchmark_parallel_vs_sequential,
     benchmark_cache_impact
 );
-criterion_main!(benches); 
+criterion_main!(benches);

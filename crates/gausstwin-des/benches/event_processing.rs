@@ -1,12 +1,12 @@
+use chrono::Utc;
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use gausstwin_des::{
-    DiscreteEventSimulator, Event, EventData, Priority, SimulationConfig,
-    RetryPolicy, ResourceConstraint, ValidationRule, MonitoringConfig,
+    DiscreteEventSimulator, Event, EventData, MonitoringConfig, Priority, ResourceConstraint,
+    RetryPolicy, SimulationConfig, ValidationRule,
 };
 use std::collections::HashMap;
 use std::time::Duration;
 use uuid::Uuid;
-use chrono::Utc;
 
 fn create_test_event(time: f64, priority: Priority) -> Event {
     Event {
@@ -46,14 +46,12 @@ fn create_test_config() -> SimulationConfig {
             backoff_factor: 2.0,
         },
         optimization_enabled: true,
-        resource_constraints: vec![
-            ResourceConstraint {
-                resource_type: "cpu".into(),
-                max_capacity: 100.0,
-                min_capacity: 10.0,
-                scaling_factor: 1.5,
-            }
-        ],
+        resource_constraints: vec![ResourceConstraint {
+            resource_type: "cpu".into(),
+            max_capacity: 100.0,
+            min_capacity: 10.0,
+            scaling_factor: 1.5,
+        }],
         validation_rules: vec![],
         monitoring_config: MonitoringConfig {
             metrics_interval: Duration::from_secs(10),
@@ -194,4 +192,4 @@ criterion_group!(
     benchmark_resource_allocation,
     benchmark_optimization_events
 );
-criterion_main!(benches); 
+criterion_main!(benches);

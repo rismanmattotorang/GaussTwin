@@ -1,21 +1,21 @@
-use serde::{Deserialize, Serialize};
 use crate::types::{CacheConfig, DbConfig, MetricsConfig, PoolConfig, VectorStoreConfig};
+use serde::{Deserialize, Serialize};
 
 /// Configuration for data stores
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StoreConfig {
     /// Vector store configuration
     pub vector_store: VectorStoreConfig,
-    
+
     /// Database configuration
     pub database: DbConfig,
-    
+
     /// Cache configuration
     pub cache: Option<CacheConfig>,
-    
+
     /// Pool configuration
     pub pool: PoolConfig,
-    
+
     /// Metrics configuration
     pub metrics: Option<MetricsConfig>,
 }
@@ -53,4 +53,4 @@ impl Default for StoreConfig {
             metrics: Some(MetricsConfig::default()),
         }
     }
-} 
+}

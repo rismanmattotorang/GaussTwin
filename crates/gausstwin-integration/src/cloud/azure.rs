@@ -225,7 +225,12 @@ impl AzureConnector {
     }
 
     /// Upload blob
-    pub async fn blob_upload(&self, container: &str, blob_name: &str, data: Vec<u8>) -> Result<String> {
+    pub async fn blob_upload(
+        &self,
+        container: &str,
+        blob_name: &str,
+        data: Vec<u8>,
+    ) -> Result<String> {
         let start = Instant::now();
 
         let etag = format!("{:x}", md5::compute(&data));
@@ -235,7 +240,10 @@ impl AzureConnector {
             if let Some(blobs) = containers.get_mut(container) {
                 blobs.insert(blob_name.to_string(), data.clone());
             } else {
-                return Err(Error::NotFound(format!("Container not found: {}", container)));
+                return Err(Error::NotFound(format!(
+                    "Container not found: {}",
+                    container
+                )));
             }
         }
 
@@ -247,7 +255,12 @@ impl AzureConnector {
             .fetch_add(data.len() as u64, Ordering::Relaxed);
         self.record_latency(start.elapsed()).await;
 
-        debug!("Uploaded blob {}/{} ({} bytes)", container, blob_name, data.len());
+        debug!(
+            "Uploaded blob {}/{} ({} bytes)",
+            container,
+            blob_name,
+            data.len()
+        );
         Ok(etag)
     }
 
@@ -263,7 +276,10 @@ impl AzureConnector {
                     .cloned()
                     .ok_or_else(|| Error::NotFound(format!("Blob not found: {}", blob_name)))?
             } else {
-                return Err(Error::NotFound(format!("Container not found: {}", container)));
+                return Err(Error::NotFound(format!(
+                    "Container not found: {}",
+                    container
+                )));
             }
         };
 
@@ -324,7 +340,10 @@ impl AzureConnector {
                     })
                     .collect()
             } else {
-                return Err(Error::NotFound(format!("Container not found: {}", container)));
+                return Err(Error::NotFound(format!(
+                    "Container not found: {}",
+                    container
+                )));
             }
         };
 
@@ -398,7 +417,10 @@ impl AzureConnector {
                 if let Some(cont) = db.get_mut(container) {
                     cont.push(document);
                 } else {
-                    return Err(Error::NotFound(format!("Container not found: {}", container)));
+                    return Err(Error::NotFound(format!(
+                        "Container not found: {}",
+                        container
+                    )));
                 }
             } else {
                 return Err(Error::NotFound(format!("Database not found: {}", database)));
@@ -428,7 +450,10 @@ impl AzureConnector {
                 if let Some(cont) = db.get(container) {
                     cont.clone()
                 } else {
-                    return Err(Error::NotFound(format!("Container not found: {}", container)));
+                    return Err(Error::NotFound(format!(
+                        "Container not found: {}",
+                        container
+                    )));
                 }
             } else {
                 return Err(Error::NotFound(format!("Database not found: {}", database)));
@@ -597,16 +622,18 @@ impl AzureConnector {
 
         let twin = {
             let mut twins = self.state.device_twins.write().await;
-            let twin = twins.entry(device_id.to_string()).or_insert_with(|| DeviceTwin {
-                device_id: device_id.to_string(),
-                etag: uuid::Uuid::new_v4().to_string(),
-                version: 0,
-                properties: TwinProperties {
-                    desired: serde_json::Value::Object(serde_json::Map::new()),
-                    reported: serde_json::Value::Object(serde_json::Map::new()),
-                },
-                tags: HashMap::new(),
-            });
+            let twin = twins
+                .entry(device_id.to_string())
+                .or_insert_with(|| DeviceTwin {
+                    device_id: device_id.to_string(),
+                    etag: uuid::Uuid::new_v4().to_string(),
+                    version: 0,
+                    properties: TwinProperties {
+                        desired: serde_json::Value::Object(serde_json::Map::new()),
+                        reported: serde_json::Value::Object(serde_json::Map::new()),
+                    },
+                    tags: HashMap::new(),
+                });
 
             twin.properties.reported = properties;
             twin.version += 1;
@@ -674,20 +701,42 @@ impl AzureConnector {
             }
         };
 
-        let total_ops = self.internal_metrics.blob_operations.load(Ordering::Relaxed)
-            + self.internal_metrics.cosmos_operations.load(Ordering::Relaxed)
-            + self.internal_metrics.service_bus_operations.load(Ordering::Relaxed)
-            + self.internal_metrics.event_hub_operations.load(Ordering::Relaxed)
-            + self.internal_metrics.iot_hub_operations.load(Ordering::Relaxed);
+        let total_ops = self
+            .internal_metrics
+            .blob_operations
+            .load(Ordering::Relaxed)
+            + self
+                .internal_metrics
+                .cosmos_operations
+                .load(Ordering::Relaxed)
+            + self
+                .internal_metrics
+                .service_bus_operations
+                .load(Ordering::Relaxed)
+            + self
+                .internal_metrics
+                .event_hub_operations
+                .load(Ordering::Relaxed)
+            + self
+                .internal_metrics
+                .iot_hub_operations
+                .load(Ordering::Relaxed);
 
         Metrics {
-            connections: if self.state.connected.load(Ordering::SeqCst) { 1 } else { 0 },
+            connections: if self.state.connected.load(Ordering::SeqCst) {
+                1
+            } else {
+                0
+            },
             connection_failures: 0,
             messages_sent: total_ops,
             messages_received: 0,
             errors: self.internal_metrics.errors.load(Ordering::Relaxed),
             average_latency_ms: avg_latency,
-            bytes_sent: self.internal_metrics.bytes_transferred.load(Ordering::Relaxed),
+            bytes_sent: self
+                .internal_metrics
+                .bytes_transferred
+                .load(Ordering::Relaxed),
             bytes_received: 0,
             uptime_seconds: uptime,
         }
@@ -762,12 +811,21 @@ mod tests {
         let mut connector = AzureConnector::new(config);
         connector.connect().await.unwrap();
 
-        connector.blob_create_container("test-container").await.unwrap();
+        connector
+            .blob_create_container("test-container")
+            .await
+            .unwrap();
 
         let data = b"Hello, Azure!".to_vec();
-        connector.blob_upload("test-container", "test-blob", data.clone()).await.unwrap();
+        connector
+            .blob_upload("test-container", "test-blob", data.clone())
+            .await
+            .unwrap();
 
-        let retrieved = connector.blob_download("test-container", "test-blob").await.unwrap();
+        let retrieved = connector
+            .blob_download("test-container", "test-blob")
+            .await
+            .unwrap();
         assert_eq!(retrieved, data);
     }
 
@@ -777,12 +835,21 @@ mod tests {
         let mut connector = AzureConnector::new(config);
         connector.connect().await.unwrap();
 
-        connector.service_bus_create_queue("test-queue").await.unwrap();
+        connector
+            .service_bus_create_queue("test-queue")
+            .await
+            .unwrap();
 
-        let message_id = connector.service_bus_send("test-queue", b"Test message".to_vec()).await.unwrap();
+        let message_id = connector
+            .service_bus_send("test-queue", b"Test message".to_vec())
+            .await
+            .unwrap();
         assert!(!message_id.is_empty());
 
-        let messages = connector.service_bus_receive("test-queue", 10).await.unwrap();
+        let messages = connector
+            .service_bus_receive("test-queue", 10)
+            .await
+            .unwrap();
         assert_eq!(messages.len(), 1);
     }
 }

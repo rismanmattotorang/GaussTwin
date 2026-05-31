@@ -1,4 +1,4 @@
-use crate::{Connector, Config, Result, common};
+use crate::{common, Config, Connector, Result};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
@@ -18,7 +18,7 @@ pub struct OracleConnector {
 
 impl OracleConnector {
     pub fn new(config: OracleConfig) -> Self {
-        Self { 
+        Self {
             config,
             metrics: common::Metrics::default(),
         }
@@ -45,4 +45,4 @@ impl Connector for OracleConnector {
     fn metrics(&self) -> &common::Metrics {
         &self.metrics
     }
-} 
+}

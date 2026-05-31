@@ -1,9 +1,9 @@
+use async_trait::async_trait;
 use std::collections::HashMap;
+use std::hash::Hash;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use std::hash::Hash;
 use tokio::sync::RwLock;
-use async_trait::async_trait;
 
 use crate::error::DataResult;
 use crate::types::CacheConfig;
@@ -33,16 +33,16 @@ pub struct CacheStats {
 pub trait AsyncCache<K, V>: Send + Sync {
     /// Get a value from the cache
     async fn get(&self, key: &K) -> DataResult<Option<V>>;
-    
+
     /// Put a value into the cache
     async fn put(&self, key: K, value: V, ttl: Option<Duration>) -> DataResult<()>;
-    
+
     /// Remove a value from the cache
     async fn remove(&self, key: &K) -> DataResult<()>;
-    
+
     /// Clear all entries from the cache
     async fn clear(&self) -> DataResult<()>;
-    
+
     /// Get cache statistics
     async fn get_stats(&self) -> CacheStats;
 }
@@ -54,7 +54,9 @@ pub struct LruCache<K, V> {
     config: CacheConfig,
 }
 
-impl<K: Clone + Hash + Eq + Send + Sync + 'static, V: Clone + Send + Sync + 'static> LruCache<K, V> {
+impl<K: Clone + Hash + Eq + Send + Sync + 'static, V: Clone + Send + Sync + 'static>
+    LruCache<K, V>
+{
     /// Create a new LRU cache
     pub fn new(config: CacheConfig) -> Self {
         let stats = Arc::new(RwLock::new(CacheStats {
@@ -105,7 +107,7 @@ impl<K: Clone + Hash + Eq + Send + Sync + 'static, V: Clone + Send + Sync + 'sta
     async fn evict_lru(&self) {
         let mut entries = self.entries.write().await;
         let mut stats = self.stats.write().await;
-        
+
         if entries.len() > self.config.max_size {
             let to_evict = entries.len() - self.config.max_size;
             let keys: Vec<_> = entries.keys().take(to_evict).cloned().collect();
@@ -119,7 +121,9 @@ impl<K: Clone + Hash + Eq + Send + Sync + 'static, V: Clone + Send + Sync + 'sta
 }
 
 #[async_trait]
-impl<K: Clone + Hash + Eq + Send + Sync + 'static, V: Clone + Send + Sync + 'static> AsyncCache<K, V> for LruCache<K, V> {
+impl<K: Clone + Hash + Eq + Send + Sync + 'static, V: Clone + Send + Sync + 'static>
+    AsyncCache<K, V> for LruCache<K, V>
+{
     async fn get(&self, key: &K) -> DataResult<Option<V>> {
         self.evict_expired().await;
 
@@ -149,13 +153,16 @@ impl<K: Clone + Hash + Eq + Send + Sync + 'static, V: Clone + Send + Sync + 'sta
         let mut entries = self.entries.write().await;
         let mut stats = self.stats.write().await;
 
-        entries.insert(key, CacheEntry {
-            value,
-            created_at: Instant::now(),
-            last_access: Instant::now(),
-            access_count: 0,
-            ttl,
-        });
+        entries.insert(
+            key,
+            CacheEntry {
+                value,
+                created_at: Instant::now(),
+                last_access: Instant::now(),
+                access_count: 0,
+                ttl,
+            },
+        );
 
         stats.size = entries.len();
         self.evict_lru().await;
@@ -207,7 +214,7 @@ where
 mod tests {
     use super::*;
     use tokio::time::sleep;
-    
+
     #[tokio::test]
     async fn test_basic_cache_operations() {
         let cache: LruCache<String, i32> = LruCache::new(CacheConfig {
@@ -215,24 +222,24 @@ mod tests {
             ttl: Duration::from_secs(1),
             refresh_ahead: false,
         });
-        
+
         // Test set and get
         cache.put("key1".into(), 42, None).await.unwrap();
         let value = cache.get(&"key1".into()).await.unwrap();
         assert_eq!(value, Some(42));
-        
+
         // Test expiration
         sleep(Duration::from_secs(2)).await;
         let value = cache.get(&"key1".into()).await.unwrap();
         assert_eq!(value, None);
-        
+
         // Test removal
         cache.put("key2".into(), 24, None).await.unwrap();
         cache.remove(&"key2".into()).await.unwrap();
         let value = cache.get(&"key2".into()).await.unwrap();
         assert_eq!(value, None);
     }
-    
+
     #[tokio::test]
     async fn test_refresh_ahead() {
         let cache: LruCache<String, i32> = LruCache::new(CacheConfig {
@@ -240,14 +247,14 @@ mod tests {
             ttl: Duration::from_secs(2),
             refresh_ahead: true,
         });
-        
+
         // Set initial value
         cache.put("key1".into(), 42, None).await.unwrap();
-        
+
         // Get with refresh-ahead
         let refresh_count = Arc::new(RwLock::new(0));
         let refresh_count_clone = Arc::clone(&refresh_count);
-        
+
         let value = cache
             .get_with_refresh(&"key1".into(), move || {
                 let count = Arc::clone(&refresh_count_clone);
@@ -258,12 +265,12 @@ mod tests {
             })
             .await
             .unwrap();
-        
+
         assert_eq!(value, Some(42));
-        
+
         // Wait for refresh
         sleep(Duration::from_secs(2)).await;
-        
+
         // Verify refresh occurred
         let value = cache.get(&"key1".into()).await.unwrap();
         assert_eq!(value, Some(43));
@@ -298,4 +305,4 @@ impl CacheLayer for NoopCache {
     async fn clear(&self) -> DataResult<()> {
         Ok(())
     }
-} 
+}

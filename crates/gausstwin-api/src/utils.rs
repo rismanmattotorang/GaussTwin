@@ -11,15 +11,20 @@ pub fn generate_request_id() -> String {
 /// Parse duration from string
 pub fn parse_duration(s: &str) -> Result<Duration, Error> {
     if s.ends_with('s') {
-        let seconds: u64 = s[..s.len() - 1].parse()
+        let seconds: u64 = s[..s.len() - 1]
+            .parse()
             .map_err(|_| Error::Configuration(format!("Invalid duration: {}", s)))?;
         Ok(Duration::from_secs(seconds))
     } else if s.ends_with("ms") {
-        let millis: u64 = s[..s.len() - 2].parse()
+        let millis: u64 = s[..s.len() - 2]
+            .parse()
             .map_err(|_| Error::Configuration(format!("Invalid duration: {}", s)))?;
         Ok(Duration::from_millis(millis))
     } else {
-        Err(Error::Configuration(format!("Invalid duration format: {}", s)))
+        Err(Error::Configuration(format!(
+            "Invalid duration format: {}",
+            s
+        )))
     }
 }
 
@@ -62,7 +67,7 @@ pub fn generate_random_string(length: usize) -> String {
                             abcdefghijklmnopqrstuvwxyz\
                             0123456789)(*&^%$#@!~";
     let mut rng = rand::thread_rng();
-    
+
     (0..length)
         .map(|_| {
             let idx = rng.gen_range(0..CHARSET.len());
@@ -73,27 +78,27 @@ pub fn generate_random_string(length: usize) -> String {
 
 /// Hash a password using Argon2
 pub fn hash_password(password: &str) -> Result<String, Error> {
-    use argon2::{Argon2, PasswordHash, PasswordHasher, PasswordVerifier};
     use argon2::password_hash::SaltString;
-    
+    use argon2::{Argon2, PasswordHash, PasswordHasher, PasswordVerifier};
+
     let salt = SaltString::generate(&mut rand::thread_rng());
     let argon2 = Argon2::default();
-    
+
     let password_hash = argon2
         .hash_password(password.as_bytes(), &salt)
         .map_err(|e| Error::Authentication(format!("Failed to hash password: {}", e)))?;
-    
+
     Ok(password_hash.to_string())
 }
 
 /// Verify a password against a hash
 pub fn verify_password(password: &str, hash: &str) -> Result<bool, Error> {
     use argon2::{Argon2, PasswordHash, PasswordVerifier};
-    
+
     let parsed_hash = PasswordHash::new(hash)
         .map_err(|e| Error::Authentication(format!("Invalid hash format: {}", e)))?;
-    
+
     Ok(Argon2::default()
         .verify_password(password.as_bytes(), &parsed_hash)
         .is_ok())
-} 
+}

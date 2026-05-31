@@ -2,7 +2,7 @@
 //!
 //! GPU-accelerated real-time visualization with support for millions of agents.
 
-use crate::{AgentId, space::VecN, error::Result};
+use crate::{error::Result, space::VecN, AgentId};
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
@@ -88,14 +88,14 @@ impl Renderer3D {
             viewport_width: 1920,
             viewport_height: 1080,
         };
-        
+
         let default_light = Light {
             position: VecN::new(10.0, 10.0, 10.0),
             color: [1.0, 1.0, 1.0],
             intensity: 1.0,
             light_type: LightType::Directional,
         };
-        
+
         Self {
             scene_objects: HashMap::new(),
             cameras: vec![default_camera],
@@ -104,68 +104,70 @@ impl Renderer3D {
             performance_stats: RenderStats::default(),
         }
     }
-    
+
     /// Add or update a scene object for an agent
     pub fn update_agent_object(&mut self, agent_id: AgentId, object: SceneObject) {
         self.scene_objects.insert(agent_id, object);
     }
-    
+
     /// Remove an agent's scene object
     pub fn remove_agent_object(&mut self, agent_id: AgentId) -> Option<SceneObject> {
         self.scene_objects.remove(&agent_id)
     }
-    
+
     /// Render the current frame with all visible objects
     pub fn render_frame(&mut self) -> Result<()> {
         let start_time = Instant::now();
-        
+
         // Frustum culling - only render visible objects
-        let visible_objects: Vec<(AgentId, &SceneObject)> = self.scene_objects
+        let visible_objects: Vec<(AgentId, &SceneObject)> = self
+            .scene_objects
             .iter()
             .filter(|(_, obj)| obj.visible)
             .map(|(id, obj)| (*id, obj))
             .collect();
-        
+
         // Sort objects by distance for optimal rendering order
         let sorted_objects = self.sort_objects_by_distance(&visible_objects);
-        
+
         // Store render data to avoid borrowing conflicts
-        let objects_to_render: Vec<(AgentId, SceneObject)> = sorted_objects.iter()
+        let objects_to_render: Vec<(AgentId, SceneObject)> = sorted_objects
+            .iter()
             .map(|(id, obj)| (*id, (*obj).clone()))
             .collect();
-        
+
         let objects_count = objects_to_render.len();
-        
+
         // Render each object
         for (agent_id, object) in objects_to_render {
             self.render_object(agent_id, &object)?;
         }
-        
+
         // Update performance statistics
         self.performance_stats.frame_time = start_time.elapsed();
         self.performance_stats.objects_rendered = objects_count;
-        
+
         Ok(())
     }
-    
+
     /// Capture a screenshot of the current frame
     pub fn screenshot(&self, _format: ImageFormat) -> Result<Vec<u8>> {
         // Implementation would capture the current framebuffer
         Ok(vec![0; 1920 * 1080 * 4]) // Placeholder: RGBA data
     }
-    
+
     /// Start recording a video of the simulation
     pub fn start_recording(&mut self, _format: VideoFormat, _quality: VideoQuality) -> Result<()> {
         // Implementation would set up video encoding
         Ok(())
     }
-    
+
     /// Stop video recording and return the encoded video
     pub fn stop_recording(&mut self) -> Result<Vec<u8>> {
         // Implementation would finalize and return video data
         Ok(vec![])
     }
-    
+
     /// Update camera transformations and matrices
     pub fn update_cameras(&mut self) {
         let camera_count = self.cameras.len();
@@ -175,39 +177,47 @@ impl Renderer3D {
             self.calculate_projection_matrix_for_camera(camera);
         }
     }
-    
+
     /// Perform frustum culling to optimize rendering
-    pub fn frustum_culling<'a>(&self, objects: &'a [(AgentId, &'a SceneObject)]) -> Vec<(AgentId, &'a SceneObject)> {
+    pub fn frustum_culling<'a>(
+        &self,
+        objects: &'a [(AgentId, &'a SceneObject)],
+    ) -> Vec<(AgentId, &'a SceneObject)> {
         // Implementation would check if objects are within camera frustum
         objects.iter().copied().collect()
     }
-    
-    fn sort_objects_by_distance<'a>(&self, objects: &'a [(AgentId, &'a SceneObject)]) -> Vec<(AgentId, &'a SceneObject)> {
+
+    fn sort_objects_by_distance<'a>(
+        &self,
+        objects: &'a [(AgentId, &'a SceneObject)],
+    ) -> Vec<(AgentId, &'a SceneObject)> {
         let camera_pos = &self.cameras[0].position;
         let mut sorted = objects.to_vec();
-        
+
         sorted.sort_by(|a, b| {
             let dist_a = self.calculate_distance(camera_pos, &a.1.position);
             let dist_b = self.calculate_distance(camera_pos, &b.1.position);
-            dist_a.partial_cmp(&dist_b).unwrap_or(std::cmp::Ordering::Equal)
+            dist_a
+                .partial_cmp(&dist_b)
+                .unwrap_or(std::cmp::Ordering::Equal)
         });
-        
+
         sorted
     }
-    
+
     fn calculate_distance(&self, pos1: &VecN, pos2: &VecN) -> f64 {
         let dx = pos1.x - pos2.x;
         let dy = pos1.y - pos2.y;
         let dz = pos1.z - pos2.z;
         (dx * dx + dy * dy + dz * dz).sqrt()
     }
-    
+
     fn render_object(&mut self, _agent_id: AgentId, _object: &SceneObject) -> Result<()> {
         // Implementation would render the 3D object using GPU
         self.performance_stats.draw_calls += 1;
         Ok(())
     }
-    
+
     fn calculate_projection_matrix_for_camera(&self, _camera: &Camera) {
         // Implementation would calculate projection matrix for the camera
     }
@@ -282,18 +292,23 @@ impl DataVisualizer {
             auto_scale: true,
         }
     }
-    
+
     /// Add a new chart for data visualization
     pub fn add_chart(&mut self, chart_id: String, chart: Chart) {
         self.charts.insert(chart_id, chart);
     }
-    
+
     /// Update chart data with new values
-    pub fn update_chart_data(&mut self, chart_id: &str, series_name: &str, data_point: (f64, f64)) -> Result<()> {
+    pub fn update_chart_data(
+        &mut self,
+        chart_id: &str,
+        series_name: &str,
+        data_point: (f64, f64),
+    ) -> Result<()> {
         if let Some(chart) = self.charts.get_mut(chart_id) {
             if let Some(series) = chart.data_series.iter_mut().find(|s| s.name == series_name) {
                 series.data.push(data_point);
-                
+
                 // Keep only recent data points to prevent memory growth
                 if series.data.len() > 1000 {
                     series.data.drain(..500);
@@ -302,19 +317,19 @@ impl DataVisualizer {
         }
         Ok(())
     }
-    
+
     /// Render all charts to image data
     pub fn render_charts(&self) -> Result<HashMap<String, Vec<u8>>> {
         let mut rendered_charts = HashMap::new();
-        
+
         for (chart_id, _chart) in &self.charts {
             // Implementation would render chart to image data
             rendered_charts.insert(chart_id.clone(), vec![0; 800 * 600 * 4]); // Placeholder
         }
-        
+
         Ok(rendered_charts)
     }
-    
+
     fn render_chart(&self, _chart: &Chart) -> Result<()> {
         // Implementation would render individual chart
         Ok(())
@@ -358,7 +373,7 @@ pub fn normalize(v: &VecN) -> VecN {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_renderer_creation() {
         let renderer = Renderer3D::new();
@@ -366,12 +381,12 @@ mod tests {
         assert_eq!(renderer.lights.len(), 1);
         assert!(renderer.scene_objects.is_empty());
     }
-    
+
     #[test]
     fn test_scene_object_management() {
         let mut renderer = Renderer3D::new();
         let agent_id = AgentId::from_raw(1);
-        
+
         let object = SceneObject {
             position: VecN::new(1.0, 2.0, 3.0),
             rotation: VecN::new(0.0, 0.0, 0.0),
@@ -380,19 +395,19 @@ mod tests {
             material_id: "default".to_string(),
             visible: true,
         };
-        
+
         renderer.update_agent_object(agent_id, object.clone());
         assert_eq!(renderer.scene_objects.len(), 1);
-        
+
         let removed = renderer.remove_agent_object(agent_id);
         assert!(removed.is_some());
         assert!(renderer.scene_objects.is_empty());
     }
-    
+
     #[test]
     fn test_data_visualizer() {
         let mut visualizer = DataVisualizer::new();
-        
+
         let chart = Chart {
             chart_type: ChartType::Line,
             title: "Agent Count".to_string(),
@@ -415,10 +430,12 @@ mod tests {
                 auto_scale: true,
             },
         };
-        
+
         visualizer.add_chart("agent_count".to_string(), chart);
-        visualizer.update_chart_data("agent_count", "count", (1.0, 100.0)).unwrap();
-        
+        visualizer
+            .update_chart_data("agent_count", "count", (1.0, 100.0))
+            .unwrap();
+
         assert_eq!(visualizer.charts.len(), 1);
     }
 }

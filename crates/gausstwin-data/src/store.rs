@@ -1,52 +1,55 @@
-use std::time::Instant;
-use std::sync::Arc;
 use async_trait::async_trait;
-use futures::{StreamExt, Stream};
-use uuid::Uuid;
-use gausstwin_vec::{VectorStore as ExternalVectorStore, MetricType, Vector, VectorError, SearchResult as VecSearchResult};
-use gausstwin_db::{SurrealStore, ComplianceConfig};
+use futures::{Stream, StreamExt};
+use gausstwin_db::{ComplianceConfig, SurrealStore};
+use gausstwin_vec::{
+    MetricType, SearchResult as VecSearchResult, Vector, VectorError,
+    VectorStore as ExternalVectorStore,
+};
 use serde_json::Value;
+use std::sync::Arc;
+use std::time::Instant;
+use uuid::Uuid;
 
 use crate::cache::{AsyncCache, LruCache};
-use crate::error::{DataError, DataResult, StorageError, ResourceKind};
+use crate::config::StoreConfig;
+use crate::error::{DataError, DataResult, ResourceKind, StorageError};
 use crate::metrics::MetricsCollector;
 use crate::pool::{ConnectionPool, PoolableConnection, PooledConnection};
 use crate::types::*;
+use crate::QueryFilters;
 use crate::UnifiedStore;
 use crate::UnifiedStoreConfig;
-use std::ops::{Deref, DerefMut};
-use serde::{Deserialize, Serialize};
-use crate::QueryFilters;
 use chrono::Utc;
-use crate::config::StoreConfig;
+use serde::{Deserialize, Serialize};
+use std::ops::{Deref, DerefMut};
 
 /// Core data store trait for all storage operations
 #[async_trait]
 pub trait DataStore: Send + Sync {
     /// Get a value by key
     async fn get(&self, key: &str) -> DataResult<Option<Value>>;
-    
+
     /// Set a value for a key
     async fn set(&self, key: &str, value: Value) -> DataResult<()>;
-    
+
     /// Delete a value by key
     async fn delete(&self, key: &str) -> DataResult<()>;
-    
+
     /// Get vector data
     async fn get_vector(&self, key: &str) -> DataResult<Option<VectorData>>;
-    
+
     /// Get scalar data
     async fn get_scalar(&self, key: &str) -> DataResult<Option<ScalarData>>;
-    
+
     /// Get hybrid data
     async fn get_hybrid(&self, key: &str) -> DataResult<Option<HybridData>>;
-    
+
     /// Search for similar vectors
     async fn search_vectors(
         &self,
         query: &VectorData,
         limit: usize,
-        filters: Option<QueryFilters>
+        filters: Option<QueryFilters>,
     ) -> DataResult<Vec<SearchResult>>;
 }
 
@@ -58,8 +61,16 @@ pub struct VectorStore {
 }
 
 impl VectorStore {
-    pub fn new(pool: ConnectionPool<VectorStore>, config: StoreConfig, vector_client: Arc<dyn VectorStoreInterface>) -> Self {
-        Self { pool, config, vector_client }
+    pub fn new(
+        pool: ConnectionPool<VectorStore>,
+        config: StoreConfig,
+        vector_client: Arc<dyn VectorStoreInterface>,
+    ) -> Self {
+        Self {
+            pool,
+            config,
+            vector_client,
+        }
     }
 }
 
@@ -136,25 +147,31 @@ impl DataStore for VectorStore {
         &self,
         query: &VectorData,
         limit: usize,
-        filters: Option<QueryFilters>
+        filters: Option<QueryFilters>,
     ) -> DataResult<Vec<SearchResult>> {
         let query_vector = Vector {
             id: "query".to_string(),
             vector: query.vector.clone(),
             metadata: Some(query.metadata.clone()),
         };
-        
-        let results = self.vector_client.search_vectors(query_vector, limit).await?;
-        
-        Ok(results.into_iter().map(|v| SearchResult {
-            key: v.id.clone(),
-            score: 0.0,
-            data: HybridData {
-                vector: Some(v.vector.clone()),
-                value: v.metadata.unwrap_or_default(),
-                metadata: serde_json::json!({}),
-            },
-        }).collect())
+
+        let results = self
+            .vector_client
+            .search_vectors(query_vector, limit)
+            .await?;
+
+        Ok(results
+            .into_iter()
+            .map(|v| SearchResult {
+                key: v.id.clone(),
+                score: 0.0,
+                data: HybridData {
+                    vector: Some(v.vector.clone()),
+                    value: v.metadata.unwrap_or_default(),
+                    metadata: serde_json::json!({}),
+                },
+            })
+            .collect())
     }
 }
 
@@ -168,9 +185,7 @@ pub struct VectorStoreConnection {
 
 impl VectorStoreConnection {
     pub fn new(client: Arc<dyn VectorStoreInterface>) -> Self {
-        Self {
-            client,
-        }
+        Self { client }
     }
 
     pub async fn store_vector(&self, vector: &Vector) -> Result<String, VectorError> {
@@ -182,21 +197,34 @@ impl VectorStoreConnection {
         self.client.get_vector(key).await
     }
 
-    pub async fn search(&self, query: &[f32], limit: usize) -> Result<Vec<SearchResult>, VectorError> {
-        let results = self.client.search_vectors(Vector {
-            id: "".to_string(),
-            vector: query.to_vec(),
-            metadata: None,
-        }, limit).await?;
-        Ok(results.into_iter().map(|v| SearchResult {
-            key: v.id.clone(),
-            score: 0.0,
-            data: HybridData {
-                vector: Some(v.vector.clone()),
-                value: v.metadata.unwrap_or_default(),
-                metadata: serde_json::json!({}),
-            },
-        }).collect())
+    pub async fn search(
+        &self,
+        query: &[f32],
+        limit: usize,
+    ) -> Result<Vec<SearchResult>, VectorError> {
+        let results = self
+            .client
+            .search_vectors(
+                Vector {
+                    id: "".to_string(),
+                    vector: query.to_vec(),
+                    metadata: None,
+                },
+                limit,
+            )
+            .await?;
+        Ok(results
+            .into_iter()
+            .map(|v| SearchResult {
+                key: v.id.clone(),
+                score: 0.0,
+                data: HybridData {
+                    vector: Some(v.vector.clone()),
+                    value: v.metadata.unwrap_or_default(),
+                    metadata: serde_json::json!({}),
+                },
+            })
+            .collect())
     }
 
     pub async fn delete_vectors(&self, keys: &[String]) -> Result<(), VectorError> {
@@ -277,8 +305,13 @@ impl PoolableConnection for DbConnection {
         true
     }
 
-    async fn connect(_url: &str) -> DataResult<Self> where Self: Sized {
-        Err(DataError::Other("DbConnection::connect not implemented".to_string()))
+    async fn connect(_url: &str) -> DataResult<Self>
+    where
+        Self: Sized,
+    {
+        Err(DataError::Other(
+            "DbConnection::connect not implemented".to_string(),
+        ))
     }
 
     async fn close(&mut self) -> DataResult<()> {
@@ -341,11 +374,15 @@ impl UnifiedStore for UnifiedStoreImpl {
         scalar_data: &ScalarData,
     ) -> DataResult<Uuid> {
         // Store vector data
-        self.vector_store.set(key, serde_json::to_value(vector_data)?).await?;
-        
+        self.vector_store
+            .set(key, serde_json::to_value(vector_data)?)
+            .await?;
+
         // Store scalar data
-        self.database.set(key, serde_json::to_value(scalar_data)?).await?;
-        
+        self.database
+            .set(key, serde_json::to_value(scalar_data)?)
+            .await?;
+
         // Update cache
         let hybrid_data = HybridData {
             vector: Some(vector_data.vector.clone()),
@@ -355,9 +392,9 @@ impl UnifiedStore for UnifiedStoreImpl {
                 "scalar_metadata": scalar_data.metadata,
             }),
         };
-        
+
         self.cache.put(key.to_string(), hybrid_data, None).await?;
-        
+
         Ok(Uuid::new_v4())
     }
 
@@ -383,11 +420,13 @@ impl UnifiedStore for UnifiedStoreImpl {
                 };
 
                 // Update cache
-                self.cache.put(key.to_string(), hybrid_data.clone(), None).await?;
+                self.cache
+                    .put(key.to_string(), hybrid_data.clone(), None)
+                    .await?;
 
                 Ok(hybrid_data)
             }
-            _ => Err(DataError::not_found(ResourceKind::Hybrid, key))
+            _ => Err(DataError::not_found(ResourceKind::Hybrid, key)),
         }
     }
 
@@ -404,7 +443,10 @@ impl UnifiedStore for UnifiedStoreImpl {
             namespace: "default".to_string(),
         };
 
-        let results = self.vector_store.search_vectors(&query_data, limit, Some(scalar_filters.clone())).await?;
+        let results = self
+            .vector_store
+            .search_vectors(&query_data, limit, Some(scalar_filters.clone()))
+            .await?;
 
         // Enrich results with scalar data
         let mut enriched_results = Vec::with_capacity(results.len());
@@ -436,16 +478,15 @@ impl UnifiedStore for UnifiedStoreImpl {
         scalar_filters: &'a QueryFilters,
         batch_size: usize,
     ) -> DataResult<Box<dyn Stream<Item = DataResult<SearchResult>> + Send + 'a>> {
-        let results = self.hybrid_search(vector_query, scalar_filters, batch_size).await?;
+        let results = self
+            .hybrid_search(vector_query, scalar_filters, batch_size)
+            .await?;
         Ok(Box::new(futures::stream::iter(results.into_iter().map(Ok))))
     }
 
-    async fn batch_store_hybrid(
-        &self,
-        records: &[HybridRecord],
-    ) -> DataResult<Vec<Uuid>> {
+    async fn batch_store_hybrid(&self, records: &[HybridRecord]) -> DataResult<Vec<Uuid>> {
         let mut ids = Vec::with_capacity(records.len());
-        
+
         for record in records {
             if let Some(vec_vals) = &record.data.vector {
                 let vector_data = VectorData {
@@ -455,18 +496,20 @@ impl UnifiedStore for UnifiedStoreImpl {
                     namespace: "default".to_string(),
                 };
 
-                let id = self.store_hybrid(
-                    &record.key,
-                    &vector_data,
-                    &ScalarData {
-                        value: record.data.value.clone(),
-                        metadata: record.data.metadata.clone(),
-                    },
-                ).await?;
+                let id = self
+                    .store_hybrid(
+                        &record.key,
+                        &vector_data,
+                        &ScalarData {
+                            value: record.data.value.clone(),
+                            metadata: record.data.metadata.clone(),
+                        },
+                    )
+                    .await?;
                 ids.push(id);
             }
         }
-        
+
         Ok(ids)
     }
 
@@ -474,10 +517,10 @@ impl UnifiedStore for UnifiedStoreImpl {
         // Delete from both stores
         self.vector_store.delete(key).await?;
         self.database.delete(key).await?;
-        
+
         // Remove from cache
         self.cache.remove(&key.to_string()).await?;
-        
+
         Ok(())
     }
 
@@ -495,12 +538,19 @@ impl UnifiedStore for UnifiedStoreImpl {
     async fn search(&self, query: &str, limit: usize) -> DataResult<Vec<Uuid>> {
         // Parse query as vector if possible
         if let Ok(vector) = serde_json::from_str::<Vec<f32>>(query) {
-            let results = self.hybrid_search(&vector, &QueryFilters {
-                metadata_filters: None,
-                value_filters: None,
-            }, limit).await?;
-            
-            Ok(results.into_iter()
+            let results = self
+                .hybrid_search(
+                    &vector,
+                    &QueryFilters {
+                        metadata_filters: None,
+                        value_filters: None,
+                    },
+                    limit,
+                )
+                .await?;
+
+            Ok(results
+                .into_iter()
                 .map(|r| Uuid::parse_str(&r.key))
                 .collect::<Result<Vec<_>, _>>()?)
         } else {
@@ -537,7 +587,8 @@ impl UnifiedStore for UnifiedStoreImpl {
                         value: data.value,
                         metadata: data.metadata,
                     },
-                ).await?;
+                )
+                .await?;
             }
         }
         Ok(())
@@ -570,7 +621,8 @@ impl UnifiedStore for UnifiedStoreImpl {
                     value: data.value,
                     metadata: data.metadata,
                 },
-            ).await?;
+            )
+            .await?;
         }
         Ok(())
     }
@@ -579,7 +631,8 @@ impl UnifiedStore for UnifiedStoreImpl {
 #[async_trait]
 pub trait VectorStoreInterface: Send + Sync {
     async fn insert_vector(&self, vector: Vector) -> Result<(), VectorError>;
-    async fn search_vectors(&self, query: Vector, limit: usize) -> Result<Vec<Vector>, VectorError>;
+    async fn search_vectors(&self, query: Vector, limit: usize)
+        -> Result<Vec<Vector>, VectorError>;
     async fn delete_vector(&self, id: &str) -> Result<(), VectorError>;
     async fn get_vector(&self, id: &str) -> Result<Option<Vector>, VectorError>;
 }
@@ -601,8 +654,13 @@ impl PoolableConnection for VectorStoreClient {
         true
     }
 
-    async fn connect(_url: &str) -> DataResult<Self> where Self: Sized {
-        Err(DataError::Other("VectorStoreClient::connect not implemented".to_string()))
+    async fn connect(_url: &str) -> DataResult<Self>
+    where
+        Self: Sized,
+    {
+        Err(DataError::Other(
+            "VectorStoreClient::connect not implemented".to_string(),
+        ))
     }
 
     async fn close(&mut self) -> DataResult<()> {
@@ -624,4 +682,4 @@ impl std::ops::Deref for VectorStoreClient {
     fn deref(&self) -> &Self::Target {
         &*self.client
     }
-} 
+}

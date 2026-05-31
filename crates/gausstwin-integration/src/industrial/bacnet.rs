@@ -245,7 +245,10 @@ pub struct ObjectId {
 
 impl ObjectId {
     pub fn new(object_type: ObjectType, instance: u32) -> Self {
-        Self { object_type, instance }
+        Self {
+            object_type,
+            instance,
+        }
     }
 
     pub fn analog_input(instance: u32) -> Self {
@@ -491,7 +494,11 @@ impl BacnetConnector {
     }
 
     /// Discover devices (Who-Is)
-    pub async fn who_is(&self, low_limit: Option<u32>, high_limit: Option<u32>) -> Result<Vec<DeviceInfo>> {
+    pub async fn who_is(
+        &self,
+        low_limit: Option<u32>,
+        high_limit: Option<u32>,
+    ) -> Result<Vec<DeviceInfo>> {
         if !self.state.connected.load(Ordering::SeqCst) {
             return Err(Error::Connection("Not connected".to_string()));
         }
@@ -592,7 +599,11 @@ impl BacnetConnector {
         };
 
         Metrics {
-            connections: if self.state.connected.load(Ordering::SeqCst) { 1 } else { 0 },
+            connections: if self.state.connected.load(Ordering::SeqCst) {
+                1
+            } else {
+                0
+            },
             connection_failures: 0,
             messages_sent: self.internal_metrics.writes.load(Ordering::Relaxed),
             messages_received: self.internal_metrics.reads.load(Ordering::Relaxed),
@@ -633,9 +644,13 @@ impl Connector for BacnetConnector {
         // Create some default objects
         let mut ai_props = HashMap::new();
         ai_props.insert(PropertyId::PresentValue, BacnetValue::Real(21.5));
-        ai_props.insert(PropertyId::ObjectName, BacnetValue::CharacterString("Temperature".to_string()));
+        ai_props.insert(
+            PropertyId::ObjectName,
+            BacnetValue::CharacterString("Temperature".to_string()),
+        );
         ai_props.insert(PropertyId::Units, BacnetValue::Enumerated(62)); // degrees-celsius
-        self.create_simulated_object(ObjectId::analog_input(0), ai_props).await?;
+        self.create_simulated_object(ObjectId::analog_input(0), ai_props)
+            .await?;
 
         info!("Connected to BACnet network");
         Ok(())
@@ -738,7 +753,13 @@ mod tests {
 
         // Write new value
         connector
-            .write_property(1234, object_id, PropertyId::PresentValue, BacnetValue::Real(25.0), None)
+            .write_property(
+                1234,
+                object_id,
+                PropertyId::PresentValue,
+                BacnetValue::Real(25.0),
+                None,
+            )
             .await
             .unwrap();
 

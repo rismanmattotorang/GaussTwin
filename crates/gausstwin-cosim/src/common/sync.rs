@@ -1,5 +1,5 @@
 //! Synchronization mechanisms for co-simulation
-//! 
+//!
 //! Provides advanced synchronization capabilities:
 //! - Conservative synchronization
 //! - Optimistic synchronization
@@ -14,16 +14,11 @@ use std::{
 };
 
 use parking_lot::{Mutex, RwLock};
-use tokio::sync::{Barrier, broadcast};
-use tracing::{debug, error, info, warn};
 use serde::{Deserialize, Serialize};
+use tokio::sync::{broadcast, Barrier};
+use tracing::{debug, error, info, warn};
 
-use super::{
-    time::SimulationTime,
-    data::DataValue,
-    CosimError,
-    Result,
-};
+use super::{data::DataValue, time::SimulationTime, CosimError, Result};
 
 use crate::common::SimulationEvent;
 
@@ -39,7 +34,7 @@ pub enum SyncMode {
         /// Maximum allowed lag between federates
         max_lag: Duration,
     },
-    
+
     /// Optimistic synchronization with rollback
     Optimistic {
         /// Maximum rollback window
@@ -49,7 +44,7 @@ pub enum SyncMode {
         /// Anti-message handling policy
         antimessage_policy: AntiMessagePolicy,
     },
-    
+
     /// Hybrid synchronization combining conservative and optimistic
     Hybrid {
         /// Conservative lookahead
@@ -59,7 +54,7 @@ pub enum SyncMode {
         /// Adaptive window sizing
         adaptive: bool,
     },
-    
+
     /// Time-stepped synchronization
     TimeStep {
         /// Step size
@@ -95,25 +90,25 @@ pub enum InterpolationMethod {
 pub struct SyncManager {
     /// Current sync mode
     mode: SyncMode,
-    
+
     /// Participating federates
     federates: HashMap<String, FederateInfo>,
-    
+
     /// Synchronization barrier
     barrier: Arc<Barrier>,
-    
+
     /// State history for rollback
     state_history: Arc<RwLock<StateHistory>>,
-    
+
     /// Event channel
     event_tx: broadcast::Sender<SyncEvent>,
-    
+
     /// Anti-message queue
     antimessages: Vec<AntiMessage>,
-    
+
     /// Adaptive window sizing stats
     adaptive_stats: Option<AdaptiveStats>,
-    
+
     /// Time management status
     time_status: TimeStatus,
 }
@@ -141,9 +136,10 @@ impl SyncManager {
     /// Register federate
     pub async fn register_federate(&mut self, name: String, info: FederateInfo) -> Result<()> {
         if self.federates.contains_key(&name) {
-            return Err(CosimError::Config(
-                format!("Federate {} already registered", name)
-            ));
+            return Err(CosimError::Config(format!(
+                "Federate {} already registered",
+                name
+            )));
         }
         self.federates.insert(name, info);
         Ok(())
@@ -158,9 +154,7 @@ impl SyncManager {
             SyncMode::Optimistic { max_rollback, .. } => {
                 self.optimistic_sync(time, max_rollback).await
             }
-            SyncMode::TimeStep { step_size, .. } => {
-                self.timestep_sync(time, step_size).await
-            }
+            SyncMode::TimeStep { step_size, .. } => self.timestep_sync(time, step_size).await,
             SyncMode::Hybrid { .. } => {
                 // TODO: implement hybrid sync
                 unimplemented!("Hybrid sync mode not yet implemented");
@@ -180,7 +174,7 @@ impl SyncManager {
         let min_time = sync_points.values().min().unwrap();
         if *min_time + SimulationTime::from_duration(lookahead) < time {
             return Err(CosimError::TimeSync(
-                "Cannot advance beyond lookahead window".to_string()
+                "Cannot advance beyond lookahead window".to_string(),
             ));
         }
 
@@ -213,7 +207,7 @@ impl SyncManager {
         let _step_time = SimulationTime::from_duration(step_size);
         if time.to_duration().as_nanos() % step_size.as_nanos() != 0 {
             return Err(CosimError::TimeSync(
-                "Time must align with step size".to_string()
+                "Time must align with step size".to_string(),
             ));
         }
 
@@ -238,24 +232,34 @@ impl SyncManager {
         if let Ok(state) = history.get_state(time) {
             let state = state.clone();
             // Notify federates
-            self.event_tx.send(SyncEvent::Rollback { time, state: state.clone() })
-                .map_err(|e| CosimError::Runtime(format!("Failed to send rollback event: {}", e)))?;
+            self.event_tx
+                .send(SyncEvent::Rollback {
+                    time,
+                    state: state.clone(),
+                })
+                .map_err(|e| {
+                    CosimError::Runtime(format!("Failed to send rollback event: {}", e))
+                })?;
 
             // Wait for acknowledgment
             self.barrier.wait().await;
             Ok(())
         } else {
-            Err(CosimError::TimeSync(
-                format!("No state found for time {}", time.to_duration().as_secs_f64())
-            ))
+            Err(CosimError::TimeSync(format!(
+                "No state found for time {}",
+                time.to_duration().as_secs_f64()
+            )))
         }
     }
 
     /// Advance simulation time
     async fn advance_time(&self, time: SimulationTime) -> Result<()> {
-        self.event_tx.send(SyncEvent::TimeAdvance { time })
-            .map_err(|e| CosimError::Runtime(format!("Failed to send time advance event: {}", e)))?;
-        
+        self.event_tx
+            .send(SyncEvent::TimeAdvance { time })
+            .map_err(|e| {
+                CosimError::Runtime(format!("Failed to send time advance event: {}", e))
+            })?;
+
         // Wait for acknowledgment
         self.barrier.wait().await;
         Ok(())
@@ -264,12 +268,17 @@ impl SyncManager {
     /// Save state for potential rollback
     pub fn save_state(&mut self, time: SimulationTime, state: StateSnapshot) {
         match self.mode {
-            SyncMode::Optimistic { max_rollback, .. } |
-            SyncMode::Hybrid { opt_window: max_rollback, .. } => {
+            SyncMode::Optimistic { max_rollback, .. }
+            | SyncMode::Hybrid {
+                opt_window: max_rollback,
+                ..
+            } => {
                 // Remove old states beyond rollback window
                 let mut history = self.state_history.write();
-                history.history.retain(|(t, _)| time.duration_since(&t) <= max_rollback);
-                
+                history
+                    .history
+                    .retain(|(t, _)| time.duration_since(&t) <= max_rollback);
+
                 // Convert StateSnapshot to SimulationState (empty for now)
                 let sim_state = SimulationState::default();
                 history.push_state(time, sim_state);
@@ -277,11 +286,13 @@ impl SyncManager {
             _ => {}
         }
     }
-    
+
     /// Process anti-message
     pub fn process_antimessage(&mut self, msg: AntiMessage) -> bool {
         match self.mode {
-            SyncMode::Optimistic { antimessage_policy, .. } => {
+            SyncMode::Optimistic {
+                antimessage_policy, ..
+            } => {
                 match antimessage_policy {
                     AntiMessagePolicy::Aggressive => {
                         // Process immediately
@@ -303,10 +314,10 @@ impl SyncManager {
                     }
                 }
             }
-            _ => false
+            _ => false,
         }
     }
-    
+
     /// Rollback to specified time
     pub fn rollback_to(&mut self, time: SimulationTime) -> bool {
         let history = self.state_history.read();
@@ -315,33 +326,33 @@ impl SyncManager {
             // Remove all states after rollback time
             let mut history = self.state_history.write();
             history.history.retain(|(t, _)| *t <= time);
-            
+
             // Update time status
             self.time_status = TimeStatus::RolledBack;
-            
+
             true
         } else {
             false
         }
     }
-    
+
     /// Update adaptive window sizing stats
     pub fn update_adaptive_stats(&mut self, metrics: AdaptiveMetrics) {
         if let Some(stats) = &mut self.adaptive_stats {
             stats.update(metrics);
         }
     }
-    
+
     /// Get current sync mode
     pub fn mode(&self) -> SyncMode {
         self.mode
     }
-    
+
     /// Get time status
     pub fn time_status(&self) -> TimeStatus {
         self.time_status
     }
-    
+
     /// Check if should process anti-messages aggressively
     fn should_process_aggressively(&self) -> bool {
         if let Some(stats) = &self.adaptive_stats {
@@ -357,10 +368,10 @@ impl SyncManager {
 pub struct FederateInfo {
     /// Federate type
     pub federate_type: FederateType,
-    
+
     /// Time management capability
     pub time_management: TimeManagement,
-    
+
     /// State capture function
     pub state_capture: Arc<dyn Fn() -> Result<FederateState> + Send + Sync>,
 }
@@ -376,11 +387,8 @@ impl FederateInfo {
 #[derive(Debug, Clone)]
 pub enum FederateType {
     /// FMI federate
-    Fmi {
-        model_name: String,
-        version: String,
-    },
-    
+    Fmi { model_name: String, version: String },
+
     /// HLA federate
     Hla {
         federation: String,
@@ -392,15 +400,11 @@ pub enum FederateType {
 #[derive(Debug, Clone)]
 pub enum TimeManagement {
     /// Time-regulated federate
-    Regulated {
-        lookahead: Duration,
-    },
-    
+    Regulated { lookahead: Duration },
+
     /// Time-constrained federate
-    Constrained {
-        min_step: Duration,
-    },
-    
+    Constrained { min_step: Duration },
+
     /// Both regulated and constrained
     RegulatedAndConstrained {
         lookahead: Duration,
@@ -420,7 +424,7 @@ pub struct SimulationState {
 pub struct FederateState {
     /// Variable values
     pub values: HashMap<String, DataValue>,
-    
+
     /// Internal state data
     pub internal: Vec<u8>,
 }
@@ -430,7 +434,7 @@ pub struct FederateState {
 struct StateHistory {
     /// Maximum history size
     max_size: usize,
-    
+
     /// State history
     history: VecDeque<(SimulationTime, SimulationState)>,
 }
@@ -458,9 +462,12 @@ impl StateHistory {
             .iter()
             .find(|(t, _)| *t <= time)
             .map(|(_, s)| s.clone())
-            .ok_or_else(|| CosimError::TimeSync(
-                format!("No state found for time {}", time.to_duration().as_secs_f64())
-            ))
+            .ok_or_else(|| {
+                CosimError::TimeSync(format!(
+                    "No state found for time {}",
+                    time.to_duration().as_secs_f64()
+                ))
+            })
     }
 }
 
@@ -468,21 +475,16 @@ impl StateHistory {
 #[derive(Debug, Clone)]
 pub enum SyncEvent {
     /// Time advance
-    TimeAdvance {
-        time: SimulationTime,
-    },
-    
+    TimeAdvance { time: SimulationTime },
+
     /// Rollback
     Rollback {
         time: SimulationTime,
         state: SimulationState,
     },
-    
+
     /// Synchronization point
-    SyncPoint {
-        label: String,
-        time: SimulationTime,
-    },
+    SyncPoint { label: String, time: SimulationTime },
 }
 
 /// State snapshot for rollback
@@ -565,22 +567,27 @@ mod tests {
         );
 
         // Register federates
-        sync_mgr.register_federate(
-            "fed1".to_string(),
-            FederateInfo {
-                federate_type: FederateType::Fmi {
-                    model_name: "model1".to_string(),
-                    version: "1.0".to_string(),
+        sync_mgr
+            .register_federate(
+                "fed1".to_string(),
+                FederateInfo {
+                    federate_type: FederateType::Fmi {
+                        model_name: "model1".to_string(),
+                        version: "1.0".to_string(),
+                    },
+                    time_management: TimeManagement::Regulated {
+                        lookahead: Duration::from_secs(1),
+                    },
+                    state_capture: Arc::new(|| {
+                        Ok(FederateState {
+                            values: HashMap::new(),
+                            internal: vec![],
+                        })
+                    }),
                 },
-                time_management: TimeManagement::Regulated {
-                    lookahead: Duration::from_secs(1),
-                },
-                state_capture: Arc::new(|| Ok(FederateState {
-                    values: HashMap::new(),
-                    internal: vec![],
-                })),
-            },
-        ).await.unwrap();
+            )
+            .await
+            .unwrap();
 
         // Test synchronization
         let time = SimulationTime::new(1, 0.0);
@@ -601,26 +608,31 @@ mod tests {
         );
 
         // Register federates
-        sync_mgr.register_federate(
-            "fed1".to_string(),
-            FederateInfo {
-                federate_type: FederateType::Hla {
-                    federation: "fed".to_string(),
-                    federate: "fed1".to_string(),
+        sync_mgr
+            .register_federate(
+                "fed1".to_string(),
+                FederateInfo {
+                    federate_type: FederateType::Hla {
+                        federation: "fed".to_string(),
+                        federate: "fed1".to_string(),
+                    },
+                    time_management: TimeManagement::RegulatedAndConstrained {
+                        lookahead: Duration::from_secs(1),
+                        min_step: Duration::from_millis(100),
+                    },
+                    state_capture: Arc::new(|| {
+                        Ok(FederateState {
+                            values: HashMap::new(),
+                            internal: vec![],
+                        })
+                    }),
                 },
-                time_management: TimeManagement::RegulatedAndConstrained {
-                    lookahead: Duration::from_secs(1),
-                    min_step: Duration::from_millis(100),
-                },
-                state_capture: Arc::new(|| Ok(FederateState {
-                    values: HashMap::new(),
-                    internal: vec![],
-                })),
-            },
-        ).await.unwrap();
+            )
+            .await
+            .unwrap();
 
         // Test synchronization
         let time = SimulationTime::new(1, 0.0);
         sync_mgr.synchronize(time).await.unwrap();
     }
-} 
+}

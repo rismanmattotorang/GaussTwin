@@ -1,21 +1,21 @@
 //! GraphQL server implementation
 
+use crate::{AppState, Error};
+use async_graphql::http::{playground_source, GraphQLPlaygroundConfig};
 use async_graphql::{
-    Context, Object, Schema, Subscription, SimpleObject, InputObject, 
-    Enum, Result as GqlResult, Error as GqlError, ID,
+    Context, Enum, Error as GqlError, InputObject, Object, Result as GqlResult, Schema,
+    SimpleObject, Subscription, ID,
 };
-use async_graphql::http::{GraphQLPlaygroundConfig, playground_source};
 use axum::{
-    response::{Html, IntoResponse},
     extract::State,
     http::StatusCode,
+    response::{Html, IntoResponse},
 };
 use futures_util::Stream;
+use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::sync::broadcast;
 use tokio_stream::StreamExt;
-use serde::{Deserialize, Serialize};
-use crate::{AppState, Error};
 
 /// Twin entity for GraphQL
 #[derive(Debug, Clone, SimpleObject, Serialize)]
@@ -89,7 +89,9 @@ impl QueryRoot {
     /// Health check query
     async fn health(&self, ctx: &Context<'_>) -> GqlResult<String> {
         let state = ctx.data::<Arc<AppState>>()?;
-        state.metrics.increment_counter("graphql.health.calls", 1, None);
+        state
+            .metrics
+            .increment_counter("graphql.health.calls", 1, None);
         Ok("ok".to_string())
     }
 
@@ -97,15 +99,18 @@ impl QueryRoot {
     async fn version(&self, _ctx: &Context<'_>) -> String {
         env!("CARGO_PKG_VERSION").to_string()
     }
-    
+
     /// Get a twin by ID
     async fn twin(&self, ctx: &Context<'_>, id: ID) -> GqlResult<Option<Twin>> {
         let state = ctx.data::<Arc<AppState>>()?;
-        
+
         // Query from database
-        let twin_data = state.db.get_twin(&id.to_string()).await
+        let twin_data = state
+            .db
+            .get_twin(&id.to_string())
+            .await
             .map_err(|e| GqlError::new(format!("Database error: {}", e)))?;
-        
+
         Ok(twin_data.map(|data| Twin {
             id: ID(data.id),
             name: data.name,
@@ -115,7 +120,7 @@ impl QueryRoot {
             status: TwinStatus::Active,
         }))
     }
-    
+
     /// List all twins with optional filtering
     async fn twins(
         &self,
@@ -125,24 +130,30 @@ impl QueryRoot {
         status: Option<TwinStatus>,
     ) -> GqlResult<Vec<Twin>> {
         let state = ctx.data::<Arc<AppState>>()?;
-        
+
         let limit = limit.unwrap_or(10).min(100) as usize;
         let offset = offset.unwrap_or(0).max(0) as usize;
-        
+
         // Query from database
-        let twins = state.db.list_twins(limit, offset, status).await
+        let twins = state
+            .db
+            .list_twins(limit, offset, status)
+            .await
             .map_err(|e| GqlError::new(format!("Database error: {}", e)))?;
-        
-        Ok(twins.into_iter().map(|data| Twin {
-            id: ID(data.id),
-            name: data.name,
-            description: data.description,
-            created_at: data.created_at,
-            updated_at: data.updated_at,
-            status: TwinStatus::Active,
-        }).collect())
+
+        Ok(twins
+            .into_iter()
+            .map(|data| Twin {
+                id: ID(data.id),
+                name: data.name,
+                description: data.description,
+                created_at: data.created_at,
+                updated_at: data.updated_at,
+                status: TwinStatus::Active,
+            })
+            .collect())
     }
-    
+
     /// Get simulation results for a twin
     async fn simulation_results(
         &self,
@@ -152,13 +163,16 @@ impl QueryRoot {
     ) -> GqlResult<Vec<SimulationResult>> {
         let state = ctx.data::<Arc<AppState>>()?;
         let limit = limit.unwrap_or(10).min(100);
-        
-        let results = state.db.get_simulation_results(&twin_id.to_string(), limit as usize).await
+
+        let results = state
+            .db
+            .get_simulation_results(&twin_id.to_string(), limit as usize)
+            .await
             .map_err(|e| GqlError::new(format!("Database error: {}", e)))?;
-        
+
         Ok(results)
     }
-    
+
     /// Search twins by name
     async fn search_twins(
         &self,
@@ -168,18 +182,24 @@ impl QueryRoot {
     ) -> GqlResult<Vec<Twin>> {
         let state = ctx.data::<Arc<AppState>>()?;
         let limit = limit.unwrap_or(10).min(100);
-        
-        let results = state.db.search_twins(&query, limit as usize).await
+
+        let results = state
+            .db
+            .search_twins(&query, limit as usize)
+            .await
             .map_err(|e| GqlError::new(format!("Database error: {}", e)))?;
-        
-        Ok(results.into_iter().map(|data| Twin {
-            id: ID(data.id),
-            name: data.name,
-            description: data.description,
-            created_at: data.created_at,
-            updated_at: data.updated_at,
-            status: TwinStatus::Active,
-        }).collect())
+
+        Ok(results
+            .into_iter()
+            .map(|data| Twin {
+                id: ID(data.id),
+                name: data.name,
+                description: data.description,
+                created_at: data.created_at,
+                updated_at: data.updated_at,
+                status: TwinStatus::Active,
+            })
+            .collect())
     }
 }
 
@@ -192,24 +212,23 @@ impl MutationRoot {
     async fn echo(&self, _ctx: &Context<'_>, message: String) -> String {
         message
     }
-    
+
     /// Create a new twin
-    async fn create_twin(
-        &self,
-        ctx: &Context<'_>,
-        input: CreateTwinInput,
-    ) -> GqlResult<Twin> {
+    async fn create_twin(&self, ctx: &Context<'_>, input: CreateTwinInput) -> GqlResult<Twin> {
         let state = ctx.data::<Arc<AppState>>()?;
-        
+
         // Validate input
         if input.name.is_empty() {
             return Err(GqlError::new("Name cannot be empty"));
         }
-        
+
         // Create twin in database
-        let twin = state.db.create_twin(input).await
+        let twin = state
+            .db
+            .create_twin(input)
+            .await
             .map_err(|e| GqlError::new(format!("Failed to create twin: {}", e)))?;
-        
+
         // Publish event
         if let Some(tx) = ctx.data_opt::<broadcast::Sender<Event>>() {
             let event = Event {
@@ -221,23 +240,24 @@ impl MutationRoot {
             };
             let _ = tx.send(event);
         }
-        
-        state.metrics.increment_counter("graphql.twins.created", 1, None);
+
+        state
+            .metrics
+            .increment_counter("graphql.twins.created", 1, None);
         Ok(twin)
     }
-    
+
     /// Update an existing twin
-    async fn update_twin(
-        &self,
-        ctx: &Context<'_>,
-        input: UpdateTwinInput,
-    ) -> GqlResult<Twin> {
+    async fn update_twin(&self, ctx: &Context<'_>, input: UpdateTwinInput) -> GqlResult<Twin> {
         let state = ctx.data::<Arc<AppState>>()?;
-        
+
         // Update twin in database
-        let twin = state.db.update_twin(input).await
+        let twin = state
+            .db
+            .update_twin(input)
+            .await
             .map_err(|e| GqlError::new(format!("Failed to update twin: {}", e)))?;
-        
+
         // Publish event
         if let Some(tx) = ctx.data_opt::<broadcast::Sender<Event>>() {
             let event = Event {
@@ -249,22 +269,23 @@ impl MutationRoot {
             };
             let _ = tx.send(event);
         }
-        
-        state.metrics.increment_counter("graphql.twins.updated", 1, None);
+
+        state
+            .metrics
+            .increment_counter("graphql.twins.updated", 1, None);
         Ok(twin)
     }
-    
+
     /// Delete a twin
-    async fn delete_twin(
-        &self,
-        ctx: &Context<'_>,
-        id: ID,
-    ) -> GqlResult<bool> {
+    async fn delete_twin(&self, ctx: &Context<'_>, id: ID) -> GqlResult<bool> {
         let state = ctx.data::<Arc<AppState>>()?;
-        
-        let deleted = state.db.delete_twin(&id.to_string()).await
+
+        let deleted = state
+            .db
+            .delete_twin(&id.to_string())
+            .await
             .map_err(|e| GqlError::new(format!("Failed to delete twin: {}", e)))?;
-        
+
         if deleted {
             // Publish event
             if let Some(tx) = ctx.data_opt::<broadcast::Sender<Event>>() {
@@ -277,13 +298,15 @@ impl MutationRoot {
                 };
                 let _ = tx.send(event);
             }
-            
-            state.metrics.increment_counter("graphql.twins.deleted", 1, None);
+
+            state
+                .metrics
+                .increment_counter("graphql.twins.deleted", 1, None);
         }
-        
+
         Ok(deleted)
     }
-    
+
     /// Start a simulation
     async fn start_simulation(
         &self,
@@ -291,11 +314,16 @@ impl MutationRoot {
         twin_id: ID,
     ) -> GqlResult<SimulationResult> {
         let state = ctx.data::<Arc<AppState>>()?;
-        
-        let result = state.db.start_simulation(&twin_id.to_string()).await
+
+        let result = state
+            .db
+            .start_simulation(&twin_id.to_string())
+            .await
             .map_err(|e| GqlError::new(format!("Failed to start simulation: {}", e)))?;
-        
-        state.metrics.increment_counter("graphql.simulations.started", 1, None);
+
+        state
+            .metrics
+            .increment_counter("graphql.simulations.started", 1, None);
         Ok(result)
     }
 }
@@ -315,7 +343,7 @@ impl SubscriptionRoot {
         // Return an empty stream - real subscriptions use WebSocket
         futures_util::stream::empty()
     }
-    
+
     /// Subscribe to all events (placeholder - use WebSocket for real-time updates)
     async fn events(
         &self,
@@ -341,7 +369,6 @@ pub fn create_schema(state: Arc<AppState>, event_tx: broadcast::Sender<Event>) -
 /// GraphQL Playground handler
 pub async fn graphql_playground() -> impl IntoResponse {
     Html(playground_source(
-        GraphQLPlaygroundConfig::new("/graphql")
-            .subscription_endpoint("/graphql/ws")
+        GraphQLPlaygroundConfig::new("/graphql").subscription_endpoint("/graphql/ws"),
     ))
-} 
+}

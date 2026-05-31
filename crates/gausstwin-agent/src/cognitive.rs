@@ -1,5 +1,5 @@
 //! Cognitive Agent Implementation
-//! 
+//!
 //! This module provides a cognitive agent architecture with:
 //! - Deep learning-based decision making
 //! - Experience replay memory
@@ -14,37 +14,34 @@ use std::{
 
 use async_trait::async_trait;
 use ndarray::{Array1, Array2};
-use rand::Rng;
+use rand::rngs::SmallRng;
 use rand::seq::IteratorRandom;
 use rand::seq::SliceRandom;
-use rand::rngs::SmallRng;
+use rand::Rng;
 use rand::SeedableRng;
 use serde::{Deserialize, Serialize};
 use tokio::sync::broadcast;
 use uuid::Uuid;
 
-use crate::{
-    Agent, AgentContext, AgentError, AgentMemory, Experience,
-    Message, Position,
-};
+use crate::{Agent, AgentContext, AgentError, AgentMemory, Experience, Message, Position};
 
 /// Cognitive agent with learning capabilities
 pub struct CognitiveAgent {
     /// Agent ID
     id: Uuid,
-    
+
     /// Current state
     state: CognitiveState,
-    
+
     /// Neural network for decision making
     network: Box<dyn NeuralNetwork>,
-    
+
     /// Experience replay buffer
     experiences: VecDeque<Experience>,
-    
+
     /// Agent memory
     memory: Option<AgentMemory>,
-    
+
     /// Learning configuration
     config: LearningConfig,
 }
@@ -54,16 +51,16 @@ pub struct CognitiveAgent {
 pub struct CognitiveState {
     /// Current position
     pub position: Position,
-    
+
     /// Current knowledge state
     pub knowledge: HashMap<String, f64>,
-    
+
     /// Current skills
     pub skills: HashMap<String, f64>,
-    
+
     /// Current relationships
     pub relationships: HashMap<Uuid, f64>,
-    
+
     /// Current emotional state
     pub emotions: EmotionalState,
 }
@@ -73,10 +70,10 @@ pub struct CognitiveState {
 pub struct EmotionalState {
     /// Valence (positive/negative)
     pub valence: f64,
-    
+
     /// Arousal (activation level)
     pub arousal: f64,
-    
+
     /// Dominance (control level)
     pub dominance: f64,
 }
@@ -86,13 +83,13 @@ pub struct EmotionalState {
 pub trait NeuralNetwork: Send + Sync {
     /// Forward pass
     async fn forward(&self, input: &Array1<f64>) -> Result<Array1<f64>, AgentError>;
-    
+
     /// Update network weights
     async fn update(&mut self, experiences: &[Experience]) -> Result<(), AgentError>;
-    
+
     /// Save network state
     async fn save(&self, path: &str) -> Result<(), AgentError>;
-    
+
     /// Load network state
     async fn load(&mut self, path: &str) -> Result<(), AgentError>;
 }
@@ -102,22 +99,22 @@ pub trait NeuralNetwork: Send + Sync {
 pub struct LearningConfig {
     /// Learning rate
     pub learning_rate: f64,
-    
+
     /// Discount factor
     pub gamma: f64,
-    
+
     /// Exploration rate
     pub epsilon: f64,
-    
+
     /// Minimum epsilon
     pub epsilon_min: f64,
-    
+
     /// Epsilon decay rate
     pub epsilon_decay: f64,
-    
+
     /// Batch size for learning
     pub batch_size: usize,
-    
+
     /// Memory capacity
     pub memory_capacity: usize,
 }
@@ -127,10 +124,10 @@ pub struct LearningConfig {
 pub enum CognitiveAction {
     /// Physical action
     Physical(PhysicalAction),
-    
+
     /// Mental action
     Mental(MentalAction),
-    
+
     /// Social action
     Social(SocialAction),
 }
@@ -140,40 +137,28 @@ pub enum CognitiveAction {
 pub enum PhysicalAction {
     /// Move to position
     MoveTo(Position),
-    
+
     /// Use object
-    UseObject {
-        object_id: String,
-        action: String,
-    },
-    
+    UseObject { object_id: String, action: String },
+
     /// Manipulate environment
-    Manipulate {
-        target: String,
-        action: String,
-    },
+    Manipulate { target: String, action: String },
 }
 
 /// Mental action types
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum MentalAction {
     /// Learn new knowledge
-    Learn {
-        topic: String,
-        source: String,
-    },
-    
+    Learn { topic: String, source: String },
+
     /// Plan sequence of actions
     Plan {
         goal: String,
         constraints: Vec<String>,
     },
-    
+
     /// Reason about situation
-    Reason {
-        context: String,
-        query: String,
-    },
+    Reason { context: String, query: String },
 }
 
 /// Social action types
@@ -185,18 +170,15 @@ pub enum SocialAction {
         message: String,
         intent: CommunicationIntent,
     },
-    
+
     /// Form relationship
     FormRelationship {
         target: Uuid,
         relationship_type: String,
     },
-    
+
     /// Cooperate on task
-    Cooperate {
-        partners: Vec<Uuid>,
-        task: String,
-    },
+    Cooperate { partners: Vec<Uuid>, task: String },
 }
 
 /// Communication intent types
@@ -237,13 +219,13 @@ impl Agent for CognitiveAgent {
     async fn observe(&self, ctx: &AgentContext) -> Result<Self::Observation, AgentError> {
         // Get current position
         let pos = ctx.space.get_agent_position(self.id).await?;
-        
+
         // Get neighbors
         let neighbors = ctx.space.get_neighbors(self.id, 10.0).await?;
-        
+
         // Create observation vector
         let mut obs = Vec::new();
-        
+
         // Add position data
         match pos {
             crate::Position::Vec2(x, y) => {
@@ -256,10 +238,10 @@ impl Agent for CognitiveAgent {
                 obs.push(z as f64);
             }
         }
-        
+
         // Add neighbor count
         obs.push(neighbors.len() as f64);
-        
+
         Ok(Array1::from_vec(obs))
     }
 
@@ -267,7 +249,13 @@ impl Agent for CognitiveAgent {
         let mut rng = SmallRng::from_entropy();
         if rng.gen::<f64>() < self.config.epsilon {
             let actions = self.get_available_actions();
-            let random_action = actions.as_slice().choose(&mut rng).cloned().unwrap_or_else(|| CognitiveAction::Physical(PhysicalAction::MoveTo(Position::Vec2(0.0, 0.0))));
+            let random_action = actions
+                .as_slice()
+                .choose(&mut rng)
+                .cloned()
+                .unwrap_or_else(|| {
+                    CognitiveAction::Physical(PhysicalAction::MoveTo(Position::Vec2(0.0, 0.0)))
+                });
             Ok(random_action)
         } else {
             let action_values = self.network.forward(obs).await?;
@@ -276,7 +264,11 @@ impl Agent for CognitiveAgent {
         }
     }
 
-    async fn act(&mut self, action: &Self::Action, ctx: &mut AgentContext) -> Result<(), AgentError> {
+    async fn act(
+        &mut self,
+        action: &Self::Action,
+        ctx: &mut AgentContext,
+    ) -> Result<(), AgentError> {
         match action {
             CognitiveAction::Physical(PhysicalAction::MoveTo(pos)) => {
                 // TODO: Fix Arc mutability issue here
@@ -285,7 +277,11 @@ impl Agent for CognitiveAgent {
             CognitiveAction::Mental(MentalAction::Learn { .. }) => {
                 self.train().await?;
             }
-            CognitiveAction::Social(SocialAction::Communicate { target, message, intent }) => {
+            CognitiveAction::Social(SocialAction::Communicate {
+                target,
+                message,
+                intent,
+            }) => {
                 let msg = Message {
                     id: Uuid::new_v4(),
                     sender: self.id,
@@ -319,7 +315,8 @@ impl Agent for CognitiveAgent {
                 // TODO: handle binary/vector content
             }
         }
-        self.state.relationships
+        self.state
+            .relationships
             .entry(msg.sender)
             .and_modify(|v| *v += 0.1)
             .or_insert(0.1);
@@ -353,18 +350,15 @@ impl CognitiveAgent {
             config,
         }
     }
-    
+
     /// Generate random action for exploration
     fn random_action(&self) -> Result<CognitiveAction, AgentError> {
         let mut rng = rand::thread_rng();
-        
+
         // Random action type
         match rng.gen_range(0..3) {
             0 => Ok(CognitiveAction::Physical(PhysicalAction::MoveTo(
-                Position::Vec2(
-                    rng.gen_range(-10.0..10.0),
-                    rng.gen_range(-10.0..10.0),
-                ),
+                Position::Vec2(rng.gen_range(-10.0..10.0), rng.gen_range(-10.0..10.0)),
             ))),
             1 => Ok(CognitiveAction::Mental(MentalAction::Learn {
                 topic: "random_topic".into(),
@@ -382,20 +376,20 @@ impl CognitiveAgent {
             _ => unreachable!(),
         }
     }
-    
+
     /// Convert network output to action
     fn action_from_values(&self, values: &Array1<f64>) -> Result<CognitiveAction, AgentError> {
         // Convert network output to action
         // This is a simplified example - real implementation would use
         // more sophisticated action selection
-        
+
         let max_idx = values
             .iter()
             .enumerate()
             .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap())
             .map(|(i, _)| i)
             .unwrap();
-            
+
         match max_idx % 3 {
             0 => Ok(CognitiveAction::Physical(PhysicalAction::MoveTo(
                 Position::Vec2(values[1], values[2]),
@@ -416,7 +410,7 @@ impl CognitiveAgent {
             _ => unreachable!(),
         }
     }
-    
+
     /// Add experience to replay buffer
     pub fn add_experience(&mut self, experience: Experience) {
         if self.experiences.len() >= self.config.memory_capacity {
@@ -424,28 +418,30 @@ impl CognitiveAgent {
         }
         self.experiences.push_back(experience);
     }
-    
+
     /// Learn from experiences
     pub async fn learn(&mut self) -> Result<(), AgentError> {
         if self.experiences.len() < self.config.batch_size {
             return Ok(());
         }
-        
+
         // Sample batch of experiences
         let mut rng = rand::thread_rng();
-        let batch: Vec<_> = self.experiences
+        let batch: Vec<_> = self
+            .experiences
             .iter()
             .choose_multiple(&mut rng, self.config.batch_size)
-            .into_iter().cloned()
+            .into_iter()
+            .cloned()
             .collect();
-            
+
         // Update network
         self.network.update(&batch).await?;
-        
+
         // Decay exploration rate
-        self.config.epsilon = (self.config.epsilon * self.config.epsilon_decay)
-            .max(self.config.epsilon_min);
-            
+        self.config.epsilon =
+            (self.config.epsilon * self.config.epsilon_decay).max(self.config.epsilon_min);
+
         Ok(())
     }
 
@@ -461,13 +457,16 @@ impl CognitiveAgent {
             return Ok(());
         }
         let mut rng = SmallRng::from_entropy();
-        let batch: Vec<_> = self.experiences
+        let batch: Vec<_> = self
+            .experiences
             .iter()
             .choose_multiple(&mut rng, self.config.batch_size)
-            .into_iter().cloned()
+            .into_iter()
+            .cloned()
             .collect();
         self.network.update(&batch).await?;
-        self.config.epsilon = (self.config.epsilon * self.config.epsilon_decay).max(self.config.epsilon_min);
+        self.config.epsilon =
+            (self.config.epsilon * self.config.epsilon_decay).max(self.config.epsilon_min);
         Ok(())
     }
 
@@ -492,7 +491,10 @@ impl CognitiveAgent {
     pub fn get_available_actions(&self) -> Vec<CognitiveAction> {
         vec![
             CognitiveAction::Physical(PhysicalAction::MoveTo(Position::Vec2(0.0, 1.0))),
-            CognitiveAction::Mental(MentalAction::Learn { topic: "topic".to_string(), source: "source".to_string() }),
+            CognitiveAction::Mental(MentalAction::Learn {
+                topic: "topic".to_string(),
+                source: "source".to_string(),
+            }),
             CognitiveAction::Social(SocialAction::Communicate {
                 target: Uuid::new_v4(),
                 message: "Hello".to_string(),
@@ -507,4 +509,4 @@ impl CognitiveAgent {
 }
 
 // Additional cognitive agent components would be implemented here
-// ... implementation of other cognitive components ... 
+// ... implementation of other cognitive components ...

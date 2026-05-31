@@ -1,5 +1,5 @@
 //! GaussTwin Database Layer
-//! 
+//!
 //! Enterprise-grade database layer with advanced features including:
 //! - Encryption at rest
 //! - Compliance management (GDPR, HIPAA)
@@ -7,7 +7,7 @@
 //! - Backup and restore
 //! - Data partitioning
 //! - Security management
-//! 
+//!
 //! # Features
 //! - Comprehensive encryption support
 //! - Compliance tracking and enforcement
@@ -15,11 +15,11 @@
 //! - Automated backup management
 //! - Advanced partitioning strategies
 //! - Security policy enforcement
-//! 
+//!
 //! # Examples
 //! ```no_run
 //! use gausstwin_db::{TwinStore, SurrealStore, ComplianceConfig};
-//! 
+//!
 //! async fn example() -> Result<(), DatabaseError> {
 //!     let config = ComplianceConfig {
 //!         gdpr_enabled: true,
@@ -43,26 +43,25 @@
 //! }
 //! ```
 
-use async_trait::async_trait;
-use bytes::Bytes;
-use chrono::{DateTime, Utc};
-use opentelemetry::{trace::{Span, Tracer}, KeyValue};
-use serde::{Deserialize, Serialize};
-use std::{sync::Arc, path::PathBuf};
-use thiserror::Error;
-use tokio::sync::{RwLock, Semaphore};
-use tracing::{error, info};
-use uuid::Uuid;
-use surrealdb::{
-    engine::remote::ws::Client,
-    opt::Config,
-    Surreal,
-};
-use rand::Rng;
 use aes_gcm::{
     aead::{Aead, KeyInit},
     Aes256Gcm,
 };
+use async_trait::async_trait;
+use bytes::Bytes;
+use chrono::{DateTime, Utc};
+use opentelemetry::{
+    trace::{Span, Tracer},
+    KeyValue,
+};
+use rand::Rng;
+use serde::{Deserialize, Serialize};
+use std::{path::PathBuf, sync::Arc};
+use surrealdb::{engine::remote::ws::Client, opt::Config, Surreal};
+use thiserror::Error;
+use tokio::sync::{RwLock, Semaphore};
+use tracing::{error, info};
+use uuid::Uuid;
 
 // Re-export core types
 pub use surrealdb;
@@ -215,16 +214,16 @@ pub struct PartitionStats {
 #[async_trait]
 pub trait TwinStore: Send + Sync {
     /// Store a simulation snapshot with encryption and compliance checks
-    /// 
+    ///
     /// # Arguments
     /// * `model_id` - Unique identifier for the model
     /// * `step` - Simulation step number
     /// * `blob` - Binary data to store
     /// * `encryption_key` - Optional encryption key
-    /// 
+    ///
     /// # Returns
     /// * `Result<()>` - Success or error
-    /// 
+    ///
     /// # Errors
     /// * `DatabaseError::Storage` - If storage fails
     /// * `DatabaseError::Encryption` - If encryption fails
@@ -236,14 +235,14 @@ pub trait TwinStore: Send + Sync {
         blob: Bytes,
         encryption_key: Option<&[u8]>,
     ) -> Result<(), DatabaseError>;
-    
+
     /// Retrieve the latest snapshot with decryption
     async fn fetch_latest(
         &self,
         model_id: Uuid,
         encryption_key: Option<&[u8]>,
     ) -> Result<Option<Bytes>, DatabaseError>;
-    
+
     /// Retrieve a specific snapshot with compliance checks
     async fn fetch_snapshot(
         &self,
@@ -251,7 +250,7 @@ pub trait TwinStore: Send + Sync {
         step: u64,
         encryption_key: Option<&[u8]>,
     ) -> Result<Option<Bytes>, DatabaseError>;
-    
+
     /// List all snapshots with pagination
     async fn list_snapshots(
         &self,
@@ -259,7 +258,7 @@ pub trait TwinStore: Send + Sync {
         page: u32,
         page_size: u32,
     ) -> Result<Vec<u64>, DatabaseError>;
-    
+
     /// Delete snapshots with audit logging
     async fn delete_snapshot(
         &self,
@@ -339,15 +338,15 @@ impl SurrealStore {
         config: ComplianceConfig,
     ) -> Result<Self, DatabaseError> {
         let endpoint = format!("{}:{}", host, port);
-        let client = surrealdb::Surreal::new::<surrealdb::engine::remote::ws::Ws>((endpoint, Config::default()))
-            .await
-            .map_err(|e| DatabaseError::Connection(e.to_string()))?;
+        let client = surrealdb::Surreal::new::<surrealdb::engine::remote::ws::Ws>((
+            endpoint,
+            Config::default(),
+        ))
+        .await
+        .map_err(|e| DatabaseError::Connection(e.to_string()))?;
 
         client
-            .signin(surrealdb::opt::auth::Root {
-                username,
-                password,
-            })
+            .signin(surrealdb::opt::auth::Root { username, password })
             .await
             .map_err(|e| DatabaseError::Security(e.to_string()))?;
 
@@ -399,10 +398,14 @@ impl SurrealStore {
         Ok(())
     }
 
-    fn encrypt_data(&self, data: &[u8], key: &[u8]) -> Result<(Vec<u8>, serde_json::Value), DatabaseError> {
+    fn encrypt_data(
+        &self,
+        data: &[u8],
+        key: &[u8],
+    ) -> Result<(Vec<u8>, serde_json::Value), DatabaseError> {
         let nonce = rand::thread_rng().gen::<[u8; 12]>();
-        let cipher = Aes256Gcm::new_from_slice(key)
-            .map_err(|e| DatabaseError::Encryption(e.to_string()))?;
+        let cipher =
+            Aes256Gcm::new_from_slice(key).map_err(|e| DatabaseError::Encryption(e.to_string()))?;
 
         let encrypted = cipher
             .encrypt(&nonce.into(), data)
@@ -416,7 +419,12 @@ impl SurrealStore {
         Ok((encrypted, metadata))
     }
 
-    fn decrypt_data(&self, data: &[u8], key: &[u8], metadata: &serde_json::Value) -> Result<Vec<u8>, DatabaseError> {
+    fn decrypt_data(
+        &self,
+        data: &[u8],
+        key: &[u8],
+        metadata: &serde_json::Value,
+    ) -> Result<Vec<u8>, DatabaseError> {
         use aes_gcm::{
             aead::{Aead, KeyInit},
             Aes256Gcm, Nonce,
@@ -425,21 +433,22 @@ impl SurrealStore {
         let nonce = metadata["nonce"]
             .as_array()
             .ok_or_else(|| DatabaseError::Encryption("Invalid nonce format".to_string()))?;
-        let nonce_bytes: Vec<u8> = nonce
-            .iter()
-            .map(|v| v.as_u64().unwrap() as u8)
-            .collect();
+        let nonce_bytes: Vec<u8> = nonce.iter().map(|v| v.as_u64().unwrap() as u8).collect();
         let nonce = Nonce::from_slice(&nonce_bytes);
 
-        let cipher = Aes256Gcm::new_from_slice(key)
-            .map_err(|e| DatabaseError::Encryption(e.to_string()))?;
+        let cipher =
+            Aes256Gcm::new_from_slice(key).map_err(|e| DatabaseError::Encryption(e.to_string()))?;
 
         cipher
             .decrypt(nonce, data)
             .map_err(|e| DatabaseError::Encryption(e.to_string()))
     }
 
-    async fn check_compliance(&self, operation: &str, data: &[u8]) -> Result<serde_json::Value, DatabaseError> {
+    async fn check_compliance(
+        &self,
+        operation: &str,
+        data: &[u8],
+    ) -> Result<serde_json::Value, DatabaseError> {
         let config = self.compliance_config.read().await;
         let metadata = serde_json::json!({
             "gdpr_compliant": config.gdpr_enabled,
@@ -470,9 +479,12 @@ impl SurrealStore {
     }
 
     /// Create a new backup with encryption and compression
-    async fn create_encrypted_backup(&self, config: &BackupConfig) -> Result<String, DatabaseError> {
+    async fn create_encrypted_backup(
+        &self,
+        config: &BackupConfig,
+    ) -> Result<String, DatabaseError> {
         let _span = self.tracer.start("create_encrypted_backup");
-        
+
         // Export data to memory first
         let temp_path = PathBuf::from("temp_export.surql");
         self.client
@@ -490,10 +502,8 @@ impl SurrealStore {
             .map_err(|e| DatabaseError::Backup(format!("Failed to clean up temp file: {}", e)))?;
 
         // Compress data
-        let compressed = zstd::encode_all(
-            export_data.as_slice(),
-            config.compression_level as i32,
-        ).map_err(|e| DatabaseError::Backup(format!("Compression failed: {}", e)))?;
+        let compressed = zstd::encode_all(export_data.as_slice(), config.compression_level as i32)
+            .map_err(|e| DatabaseError::Backup(format!("Compression failed: {}", e)))?;
 
         // Encrypt if key provided
         let final_data = if let Some(key) = &config.encryption_key {
@@ -505,7 +515,7 @@ impl SurrealStore {
 
         let backup_id = Uuid::new_v4().to_string();
         let backup_path = format!("{}/{}.backup", config.storage_path, backup_id);
-        
+
         tokio::fs::write(&backup_path, final_data)
             .await
             .map_err(|e| DatabaseError::Backup(format!("Failed to write backup: {}", e)))?;
@@ -535,7 +545,11 @@ impl SurrealStore {
                  DEFINE INDEX partition_hash ON partition_{}_{} FIELDS hash_key;",
                 self.namespace, config.key, self.namespace, config.key, self.namespace, config.key
             ),
-            _ => return Err(DatabaseError::Partition("Unsupported partition strategy".to_string())),
+            _ => {
+                return Err(DatabaseError::Partition(
+                    "Unsupported partition strategy".to_string(),
+                ))
+            }
         };
 
         self.client
@@ -552,7 +566,9 @@ impl SurrealStore {
                 ),
                 None => format!(
                     "DEFINE RETENTION ON partition_{}_{} SIZE {};",
-                    self.namespace, config.key, config.retention_policy.max_size_gb.unwrap_or(1000)
+                    self.namespace,
+                    config.key,
+                    config.retention_policy.max_size_gb.unwrap_or(1000)
                 ),
             };
 
@@ -566,7 +582,10 @@ impl SurrealStore {
     }
 
     /// Implement security configuration
-    async fn configure_security_settings(&self, config: &SecurityConfig) -> Result<(), DatabaseError> {
+    async fn configure_security_settings(
+        &self,
+        config: &SecurityConfig,
+    ) -> Result<(), DatabaseError> {
         let mut span = self.tracer.start("configure_security");
         span.set_attributes(vec![
             KeyValue::new("encryption_at_rest", config.encryption_at_rest),
@@ -596,7 +615,10 @@ impl SurrealStore {
         // Configure IP whitelist
         if !config.access_control.ip_whitelist.is_empty() {
             // Implementation would depend on SurrealDB's network configuration options
-            info!("Configuring IP whitelist: {:?}", config.access_control.ip_whitelist);
+            info!(
+                "Configuring IP whitelist: {:?}",
+                config.access_control.ip_whitelist
+            );
         }
 
         Ok(())
@@ -605,29 +627,29 @@ impl SurrealStore {
     /// Implement key rotation
     async fn rotate_encryption_keys(&self) -> Result<(), DatabaseError> {
         let mut span = self.tracer.start("rotate_encryption_keys");
-        
+
         // Generate new key
         let new_key = rand::thread_rng().gen::<[u8; 32]>();
-        
+
         // Re-encrypt all data with new key
         // This is a placeholder - actual implementation would need to:
         // 1. List all encrypted records
         // 2. Decrypt with old key
         // 3. Re-encrypt with new key
         // 4. Update records atomically
-        
+
         span.set_attribute(KeyValue::new("status", "completed"));
         Ok(())
     }
 
     async fn get_partition_stats(&self) -> Result<Vec<PartitionStats>, DatabaseError> {
         let _span = self.tracer.start("get_partition_stats");
-        
+
         // This is a placeholder - actual implementation would need to:
         // 1. Query partition metadata
         // 2. Aggregate statistics
         // 3. Return results
-        
+
         Ok(Vec::new())
     }
 
@@ -679,8 +701,12 @@ impl SurrealStore {
         Ok(())
     }
 
-    pub async fn create_compliance_config(&self, config: ComplianceConfig) -> Result<(), DatabaseError> {
-        let _result: Vec<ComplianceConfig> = self.client
+    pub async fn create_compliance_config(
+        &self,
+        config: ComplianceConfig,
+    ) -> Result<(), DatabaseError> {
+        let _result: Vec<ComplianceConfig> = self
+            .client
             .create("compliance_config")
             .content(&config)
             .await
@@ -732,7 +758,8 @@ impl TwinStore for SurrealStore {
         let mut span = self.tracer.start("fetch_latest");
         span.set_attributes(vec![KeyValue::new("model_id", model_id.to_string())]);
 
-        let _permit = self.rate_limiter
+        let _permit = self
+            .rate_limiter
             .acquire()
             .await
             .map_err(|_| DatabaseError::RateLimit)?;
@@ -758,10 +785,14 @@ impl TwinStore for SurrealStore {
                         let decrypted = self.decrypt_data(&record.data, key, &metadata)?;
                         Ok(Some(Bytes::from(decrypted)))
                     } else {
-                        Err(DatabaseError::Encryption("Missing encryption metadata".to_string()))
+                        Err(DatabaseError::Encryption(
+                            "Missing encryption metadata".to_string(),
+                        ))
                     }
                 } else {
-                    Err(DatabaseError::Encryption("Encryption key required".to_string()))
+                    Err(DatabaseError::Encryption(
+                        "Encryption key required".to_string(),
+                    ))
                 }
             } else {
                 Ok(Some(Bytes::from(record.data)))
@@ -783,7 +814,8 @@ impl TwinStore for SurrealStore {
             KeyValue::new("step", step as i64),
         ]);
 
-        let _permit = self.rate_limiter
+        let _permit = self
+            .rate_limiter
             .acquire()
             .await
             .map_err(|_| DatabaseError::RateLimit)?;
@@ -810,10 +842,14 @@ impl TwinStore for SurrealStore {
                         let decrypted = self.decrypt_data(&record.data, key, &metadata)?;
                         Ok(Some(Bytes::from(decrypted)))
                     } else {
-                        Err(DatabaseError::Encryption("Missing encryption metadata".to_string()))
+                        Err(DatabaseError::Encryption(
+                            "Missing encryption metadata".to_string(),
+                        ))
                     }
                 } else {
-                    Err(DatabaseError::Encryption("Encryption key required".to_string()))
+                    Err(DatabaseError::Encryption(
+                        "Encryption key required".to_string(),
+                    ))
                 }
             } else {
                 Ok(Some(Bytes::from(record.data)))
@@ -836,7 +872,8 @@ impl TwinStore for SurrealStore {
             KeyValue::new("page_size", page_size as i64),
         ]);
 
-        let _permit = self.rate_limiter
+        let _permit = self
+            .rate_limiter
             .acquire()
             .await
             .map_err(|_| DatabaseError::RateLimit)?;

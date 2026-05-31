@@ -12,14 +12,14 @@
 //! - Custom metric types
 //! - Export capabilities (JSON, CSV, Prometheus)
 
-use std::collections::{HashMap, VecDeque};
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
-use serde::{Deserialize, Serialize};
 use crate::{
     agent::AgentId,
-    error::{Result, GaussTwinError},
+    error::{GaussTwinError, Result},
     time::SimTime,
 };
+use serde::{Deserialize, Serialize};
+use std::collections::{HashMap, VecDeque};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 /// Central metrics collector for the GaussTwin framework
 #[derive(Debug)]
@@ -235,7 +235,7 @@ impl MetricsCollector {
     pub fn new() -> Self {
         Self::with_config(MetricsConfig::default())
     }
-    
+
     /// Create a new metrics collector with custom configuration
     pub fn with_config(config: MetricsConfig) -> Self {
         Self {
@@ -259,53 +259,66 @@ impl MetricsCollector {
             start_time: Instant::now(),
         }
     }
-    
+
     /// Increment a counter metric
     pub fn increment_counter(&mut self, name: &str, description: &str) -> Result<()> {
         self.increment_counter_by(name, 1, description)
     }
-    
+
     /// Increment a counter metric by a specific amount
-    pub fn increment_counter_by(&mut self, name: &str, amount: u64, description: &str) -> Result<()> {
-        let counter = self.counters.entry(name.to_string()).or_insert_with(|| Counter {
-            value: 0,
-            created_at: SystemTime::now(),
-            updated_at: SystemTime::now(),
-            description: description.to_string(),
-            labels: HashMap::new(),
-        });
-        
+    pub fn increment_counter_by(
+        &mut self,
+        name: &str,
+        amount: u64,
+        description: &str,
+    ) -> Result<()> {
+        let counter = self
+            .counters
+            .entry(name.to_string())
+            .or_insert_with(|| Counter {
+                value: 0,
+                created_at: SystemTime::now(),
+                updated_at: SystemTime::now(),
+                description: description.to_string(),
+                labels: HashMap::new(),
+            });
+
         counter.value += amount;
         counter.updated_at = SystemTime::now();
         Ok(())
     }
-    
+
     /// Set a gauge metric value
     pub fn set_gauge(&mut self, name: &str, value: f64, description: &str) -> Result<()> {
-        let gauge = self.gauges.entry(name.to_string()).or_insert_with(|| Gauge {
-            value: 0.0,
-            min_value: f64::INFINITY,
-            max_value: f64::NEG_INFINITY,
-            created_at: SystemTime::now(),
-            updated_at: SystemTime::now(),
-            description: description.to_string(),
-            labels: HashMap::new(),
-        });
-        
+        let gauge = self
+            .gauges
+            .entry(name.to_string())
+            .or_insert_with(|| Gauge {
+                value: 0.0,
+                min_value: f64::INFINITY,
+                max_value: f64::NEG_INFINITY,
+                created_at: SystemTime::now(),
+                updated_at: SystemTime::now(),
+                description: description.to_string(),
+                labels: HashMap::new(),
+            });
+
         gauge.value = value;
         gauge.min_value = gauge.min_value.min(value);
         gauge.max_value = gauge.max_value.max(value);
         gauge.updated_at = SystemTime::now();
         Ok(())
     }
-    
+
     /// Record a value in a histogram
     pub fn record_histogram(&mut self, name: &str, value: f64, description: &str) -> Result<()> {
         let histogram = self.histograms.entry(name.to_string()).or_insert_with(|| {
             // Default buckets for latency measurements (in milliseconds)
-            let buckets = vec![0.1, 0.5, 1.0, 2.5, 5.0, 10.0, 25.0, 50.0, 100.0, 250.0, 500.0, 1000.0];
+            let buckets = vec![
+                0.1, 0.5, 1.0, 2.5, 5.0, 10.0, 25.0, 50.0, 100.0, 250.0, 500.0, 1000.0,
+            ];
             let bucket_counts = vec![0; buckets.len() + 1]; // +1 for overflow bucket
-            
+
             Histogram {
                 buckets,
                 bucket_counts,
@@ -317,69 +330,87 @@ impl MetricsCollector {
                 labels: HashMap::new(),
             }
         });
-        
+
         histogram.count += 1;
         histogram.sum += value;
         histogram.updated_at = SystemTime::now();
-        
+
         // Find appropriate bucket
-        let bucket_index = histogram.buckets.iter()
+        let bucket_index = histogram
+            .buckets
+            .iter()
             .position(|&bucket| value <= bucket)
             .unwrap_or(histogram.buckets.len());
-        
+
         histogram.bucket_counts[bucket_index] += 1;
         Ok(())
     }
-    
+
     /// Add a data point to a time series
-    pub fn record_time_series(&mut self, name: &str, value: f64, sim_time: Option<SimTime>, description: &str) -> Result<()> {
-        let time_series = self.time_series.entry(name.to_string()).or_insert_with(|| TimeSeries {
-            points: VecDeque::new(),
-            max_points: self.config.max_time_series_points,
-            description: description.to_string(),
-        });
-        
+    pub fn record_time_series(
+        &mut self,
+        name: &str,
+        value: f64,
+        sim_time: Option<SimTime>,
+        description: &str,
+    ) -> Result<()> {
+        let time_series = self
+            .time_series
+            .entry(name.to_string())
+            .or_insert_with(|| TimeSeries {
+                points: VecDeque::new(),
+                max_points: self.config.max_time_series_points,
+                description: description.to_string(),
+            });
+
         let data_point = DataPoint {
             timestamp: SystemTime::now(),
             sim_time,
             value,
             labels: HashMap::new(),
         };
-        
+
         time_series.points.push_back(data_point);
-        
+
         // Keep only the most recent points
         while time_series.points.len() > time_series.max_points {
             time_series.points.pop_front();
         }
-        
+
         Ok(())
     }
-    
+
     /// Update agent metrics
     pub fn update_agent_metrics(&mut self, agent_id: AgentId) -> Result<()> {
         if !self.config.enable_agent_metrics {
             return Ok(());
         }
-        
-        let agent_metrics = self.agent_metrics.entry(agent_id).or_insert_with(|| AgentMetrics {
-            agent_id,
-            actions_count: 0,
-            messages_sent: 0,
-            messages_received: 0,
-            execution_time: Duration::default(),
-            last_position: None,
-            properties: HashMap::new(),
-            created_at: SystemTime::now(),
-            updated_at: SystemTime::now(),
-        });
-        
+
+        let agent_metrics = self
+            .agent_metrics
+            .entry(agent_id)
+            .or_insert_with(|| AgentMetrics {
+                agent_id,
+                actions_count: 0,
+                messages_sent: 0,
+                messages_received: 0,
+                execution_time: Duration::default(),
+                last_position: None,
+                properties: HashMap::new(),
+                created_at: SystemTime::now(),
+                updated_at: SystemTime::now(),
+            });
+
         agent_metrics.updated_at = SystemTime::now();
         Ok(())
     }
-    
+
     /// Record agent action
-    pub fn record_agent_action(&mut self, agent_id: AgentId, execution_time: Duration) -> Result<()> {
+    pub fn record_agent_action(
+        &mut self,
+        agent_id: AgentId,
+        execution_time: Duration,
+    ) -> Result<()> {
         if let Some(metrics) = self.agent_metrics.get_mut(&agent_id) {
             metrics.actions_count += 1;
             metrics.execution_time += execution_time;
@@ -387,7 +418,7 @@ impl MetricsCollector {
         }
         Ok(())
     }
-    
+
     /// Record agent message sent
     pub fn record_agent_message_sent(&mut self, agent_id: AgentId) -> Result<()> {
         if let Some(metrics) = self.agent_metrics.get_mut(&agent_id) {
@@ -396,7 +427,7 @@ impl MetricsCollector {
         }
         Ok(())
     }
-    
+
     /// Record agent message received
     pub fn record_agent_message_received(&mut self, agent_id: AgentId) -> Result<()> {
         if let Some(metrics) = self.agent_metrics.get_mut(&agent_id) {
@@ -405,12 +436,17 @@ impl MetricsCollector {
         }
         Ok(())
     }
-    
+
     /// Update system metrics
-    pub fn update_system_metrics(&mut self, sim_time: SimTime, total_agents: usize, active_agents: usize) -> Result<()> {
+    pub fn update_system_metrics(
+        &mut self,
+        sim_time: SimTime,
+        total_agents: usize,
+        active_agents: usize,
+    ) -> Result<()> {
         let now = SystemTime::now();
         let real_elapsed = self.start_time.elapsed();
-        
+
         self.system_metrics.simulation_time = sim_time;
         self.system_metrics.total_agents = total_agents;
         self.system_metrics.active_agents = active_agents;
@@ -421,28 +457,32 @@ impl MetricsCollector {
             0.0
         };
         self.system_metrics.updated_at = now;
-        
+
         // Update memory usage (simplified - in real implementation would use system calls)
         self.system_metrics.memory_usage = self.estimate_memory_usage();
-        
+
         Ok(())
     }
-    
+
     /// Get counter value
     pub fn get_counter(&self, name: &str) -> Option<u64> {
         self.counters.get(name).map(|c| c.value)
     }
-    
+
     /// Get gauge value
     pub fn get_gauge(&self, name: &str) -> Option<f64> {
         self.gauges.get(name).map(|g| g.value)
     }
-    
+
     /// Get histogram statistics
     pub fn get_histogram_stats(&self, name: &str) -> Option<Statistics> {
         self.histograms.get(name).map(|h| {
-            let mean = if h.count > 0 { h.sum / h.count as f64 } else { 0.0 };
-            
+            let mean = if h.count > 0 {
+                h.sum / h.count as f64
+            } else {
+                0.0
+            };
+
             Statistics {
                 count: h.count,
                 sum: h.sum,
@@ -456,22 +496,22 @@ impl MetricsCollector {
             }
         })
     }
-    
+
     /// Get time series data
     pub fn get_time_series(&self, name: &str) -> Option<&TimeSeries> {
         self.time_series.get(name)
     }
-    
+
     /// Get agent metrics
     pub fn get_agent_metrics(&self, agent_id: AgentId) -> Option<&AgentMetrics> {
         self.agent_metrics.get(&agent_id)
     }
-    
+
     /// Get system metrics
     pub fn get_system_metrics(&self) -> &SystemMetrics {
         &self.system_metrics
     }
-    
+
     /// Get all metric names
     pub fn get_metric_names(&self) -> Vec<String> {
         let mut names = Vec::new();
@@ -482,7 +522,7 @@ impl MetricsCollector {
         names.sort();
         names
     }
-    
+
     /// Export metrics as JSON
     pub fn export_json(&self) -> Result<String> {
         let export_data = serde_json::json!({
@@ -497,39 +537,45 @@ impl MetricsCollector {
                 .map_err(|e| GaussTwinError::Custom(format!("Time error: {}", e)))?
                 .as_secs()
         });
-        
+
         serde_json::to_string_pretty(&export_data)
             .map_err(|e| GaussTwinError::Custom(format!("JSON serialization error: {}", e)))
     }
-    
+
     /// Export metrics as CSV
     pub fn export_csv(&self) -> Result<String> {
         let mut csv = String::new();
         csv.push_str("metric_type,name,value,timestamp,description\n");
-        
+
         // Export counters
         for (name, counter) in &self.counters {
-            let timestamp = counter.updated_at
+            let timestamp = counter
+                .updated_at
                 .duration_since(UNIX_EPOCH)
                 .map_err(|e| GaussTwinError::Custom(format!("Time error: {}", e)))?
                 .as_secs();
-            csv.push_str(&format!("counter,{},{},{},{}\n", 
-                name, counter.value, timestamp, counter.description));
+            csv.push_str(&format!(
+                "counter,{},{},{},{}\n",
+                name, counter.value, timestamp, counter.description
+            ));
         }
-        
+
         // Export gauges
         for (name, gauge) in &self.gauges {
-            let timestamp = gauge.updated_at
+            let timestamp = gauge
+                .updated_at
                 .duration_since(UNIX_EPOCH)
                 .map_err(|e| GaussTwinError::Custom(format!("Time error: {}", e)))?
                 .as_secs();
-            csv.push_str(&format!("gauge,{},{},{},{}\n", 
-                name, gauge.value, timestamp, gauge.description));
+            csv.push_str(&format!(
+                "gauge,{},{},{},{}\n",
+                name, gauge.value, timestamp, gauge.description
+            ));
         }
-        
+
         Ok(csv)
     }
-    
+
     /// Clear all metrics
     pub fn clear(&mut self) {
         self.counters.clear();
@@ -539,12 +585,12 @@ impl MetricsCollector {
         self.agent_metrics.clear();
         self.start_time = Instant::now();
     }
-    
+
     /// Get uptime
     pub fn uptime(&self) -> Duration {
         self.start_time.elapsed()
     }
-    
+
     // Helper method to estimate memory usage
     fn estimate_memory_usage(&self) -> u64 {
         // Simplified estimation - in real implementation would use system APIs
@@ -552,12 +598,19 @@ impl MetricsCollector {
         let counters_size = self.counters.len() as u64 * 64;
         let gauges_size = self.gauges.len() as u64 * 96;
         let histograms_size = self.histograms.len() as u64 * 256;
-        let time_series_size = self.time_series.values()
+        let time_series_size = self
+            .time_series
+            .values()
             .map(|ts| ts.points.len() as u64 * 64)
             .sum::<u64>();
         let agent_metrics_size = self.agent_metrics.len() as u64 * 128;
-        
-        base_size + counters_size + gauges_size + histograms_size + time_series_size + agent_metrics_size
+
+        base_size
+            + counters_size
+            + gauges_size
+            + histograms_size
+            + time_series_size
+            + agent_metrics_size
     }
 }
 
@@ -571,7 +624,7 @@ impl Default for MetricsCollector {
 pub trait Measurable {
     /// Get metric names that this object provides
     fn metric_names(&self) -> Vec<String>;
-    
+
     /// Record metrics to the collector
     fn record_metrics(&self, collector: &mut MetricsCollector) -> Result<()>;
 }
@@ -585,102 +638,126 @@ mod tests {
         let collector = MetricsCollector::new();
         assert_eq!(collector.get_metric_names().len(), 0);
     }
-    
+
     #[test]
     fn test_counter_operations() {
         let mut collector = MetricsCollector::new();
-        
-        collector.increment_counter("test_counter", "A test counter").unwrap();
+
+        collector
+            .increment_counter("test_counter", "A test counter")
+            .unwrap();
         assert_eq!(collector.get_counter("test_counter"), Some(1));
-        
-        collector.increment_counter_by("test_counter", 5, "A test counter").unwrap();
+
+        collector
+            .increment_counter_by("test_counter", 5, "A test counter")
+            .unwrap();
         assert_eq!(collector.get_counter("test_counter"), Some(6));
     }
-    
+
     #[test]
     fn test_gauge_operations() {
         let mut collector = MetricsCollector::new();
-        
-        collector.set_gauge("test_gauge", 42.5, "A test gauge").unwrap();
+
+        collector
+            .set_gauge("test_gauge", 42.5, "A test gauge")
+            .unwrap();
         assert_eq!(collector.get_gauge("test_gauge"), Some(42.5));
-        
-        collector.set_gauge("test_gauge", 10.0, "A test gauge").unwrap();
+
+        collector
+            .set_gauge("test_gauge", 10.0, "A test gauge")
+            .unwrap();
         assert_eq!(collector.get_gauge("test_gauge"), Some(10.0));
     }
-    
+
     #[test]
     fn test_histogram_operations() {
         let mut collector = MetricsCollector::new();
-        
-        collector.record_histogram("test_histogram", 1.5, "A test histogram").unwrap();
-        collector.record_histogram("test_histogram", 2.5, "A test histogram").unwrap();
-        
+
+        collector
+            .record_histogram("test_histogram", 1.5, "A test histogram")
+            .unwrap();
+        collector
+            .record_histogram("test_histogram", 2.5, "A test histogram")
+            .unwrap();
+
         let stats = collector.get_histogram_stats("test_histogram").unwrap();
         assert_eq!(stats.count, 2);
         assert_eq!(stats.sum, 4.0);
         assert_eq!(stats.mean, 2.0);
     }
-    
+
     #[test]
     fn test_time_series_operations() {
         let mut collector = MetricsCollector::new();
-        
-        collector.record_time_series("test_series", 1.0, Some(SimTime::new(1.0)), "A test series").unwrap();
-        collector.record_time_series("test_series", 2.0, Some(SimTime::new(2.0)), "A test series").unwrap();
-        
+
+        collector
+            .record_time_series("test_series", 1.0, Some(SimTime::new(1.0)), "A test series")
+            .unwrap();
+        collector
+            .record_time_series("test_series", 2.0, Some(SimTime::new(2.0)), "A test series")
+            .unwrap();
+
         let series = collector.get_time_series("test_series").unwrap();
         assert_eq!(series.points.len(), 2);
         assert_eq!(series.points[0].value, 1.0);
         assert_eq!(series.points[1].value, 2.0);
     }
-    
+
     #[test]
     fn test_agent_metrics() {
         let mut collector = MetricsCollector::new();
         let agent_id = AgentId::new();
-        
+
         collector.update_agent_metrics(agent_id).unwrap();
-        collector.record_agent_action(agent_id, Duration::from_millis(100)).unwrap();
+        collector
+            .record_agent_action(agent_id, Duration::from_millis(100))
+            .unwrap();
         collector.record_agent_message_sent(agent_id).unwrap();
-        
+
         let metrics = collector.get_agent_metrics(agent_id).unwrap();
         assert_eq!(metrics.actions_count, 1);
         assert_eq!(metrics.messages_sent, 1);
         assert_eq!(metrics.execution_time, Duration::from_millis(100));
     }
-    
+
     #[test]
     fn test_system_metrics() {
         let mut collector = MetricsCollector::new();
-        
-        collector.update_system_metrics(SimTime::new(10.0), 100, 80).unwrap();
-        
+
+        collector
+            .update_system_metrics(SimTime::new(10.0), 100, 80)
+            .unwrap();
+
         let metrics = collector.get_system_metrics();
         assert_eq!(metrics.total_agents, 100);
         assert_eq!(metrics.active_agents, 80);
         assert_eq!(metrics.simulation_time, SimTime::new(10.0));
     }
-    
+
     #[test]
     fn test_export_json() {
         let mut collector = MetricsCollector::new();
         collector.increment_counter("test", "Test counter").unwrap();
-        collector.set_gauge("test_gauge", 42.0, "Test gauge").unwrap();
-        
+        collector
+            .set_gauge("test_gauge", 42.0, "Test gauge")
+            .unwrap();
+
         let json = collector.export_json().unwrap();
         assert!(json.contains("test"));
         assert!(json.contains("test_gauge"));
         assert!(json.contains("42"));
     }
-    
+
     #[test]
     fn test_export_csv() {
         let mut collector = MetricsCollector::new();
         collector.increment_counter("test", "Test counter").unwrap();
-        collector.set_gauge("test_gauge", 42.0, "Test gauge").unwrap();
-        
+        collector
+            .set_gauge("test_gauge", 42.0, "Test gauge")
+            .unwrap();
+
         let csv = collector.export_csv().unwrap();
         assert!(csv.contains("counter,test,1"));
         assert!(csv.contains("gauge,test_gauge,42"));
     }
-} 
+}

@@ -1,9 +1,9 @@
-use std::sync::Arc;
+use crate::{config::CacheConfig, error::Result};
 use skytable::actions::Actions;
 use skytable::sync::Connection;
+use std::sync::Arc;
 use tokio::sync::RwLock;
 use tracing::{info, warn};
-use crate::{config::CacheConfig, error::Result};
 
 /// Cache manager for handling SkyTable operations
 pub struct CacheManager {
@@ -17,21 +17,24 @@ impl CacheManager {
     /// Create a new cache manager
     pub async fn new(config: &CacheConfig) -> Result<Self> {
         info!("Initializing cache manager...");
-        
+
         // Connect to SkyTable
-        match Connection::new(
-            &config.skytable.host,
-            config.skytable.port,
-        ) {
+        match Connection::new(&config.skytable.host, config.skytable.port) {
             Ok(conn) => {
-                info!("Connected to SkyTable at {}:{}", config.skytable.host, config.skytable.port);
+                info!(
+                    "Connected to SkyTable at {}:{}",
+                    config.skytable.host, config.skytable.port
+                );
                 Ok(Self {
                     conn: Some(Arc::new(RwLock::new(conn))),
                     config: config.clone(),
                 })
             }
             Err(e) => {
-                warn!("Failed to connect to SkyTable: {}. Caching will be disabled.", e);
+                warn!(
+                    "Failed to connect to SkyTable: {}. Caching will be disabled.",
+                    e
+                );
                 Ok(Self {
                     conn: None,
                     config: config.clone(),
@@ -46,19 +49,19 @@ impl CacheManager {
             Some(c) => c,
             None => return Ok(()),
         };
-        
+
         let mut conn = conn_arc.write().await;
-        
+
         // Convert bytes to string for skytable
         let value_str = String::from_utf8_lossy(value);
-        
+
         if let Some(_ttl) = ttl {
             // TTL not supported in this version, just set without TTL
             conn.set(key, &*value_str)?;
         } else {
             conn.set(key, &*value_str)?;
         }
-        
+
         Ok(())
     }
 
@@ -68,7 +71,7 @@ impl CacheManager {
             Some(c) => c,
             None => return Ok(None),
         };
-        
+
         let mut conn = conn_arc.write().await;
         let value: String = conn.get(key)?;
         Ok(Some(value.into_bytes()))
@@ -80,7 +83,7 @@ impl CacheManager {
             Some(c) => c,
             None => return Ok(false),
         };
-        
+
         let mut conn = conn_arc.write().await;
         let deleted = conn.del(key)?;
         Ok(deleted > 0)
@@ -92,7 +95,7 @@ impl CacheManager {
             Some(c) => c,
             None => return Ok(false),
         };
-        
+
         let mut conn = conn_arc.write().await;
         let exists = conn.exists(key)?;
         Ok(exists > 0)
@@ -104,14 +107,14 @@ impl CacheManager {
             Some(c) => c,
             None => return Ok(()),
         };
-        
+
         let mut conn = conn_arc.write().await;
         // Convert pairs to string format
         let string_pairs: Vec<(&str, String)> = pairs
             .iter()
             .map(|(k, v)| (*k, String::from_utf8_lossy(v).to_string()))
             .collect();
-        
+
         // Set each pair individually since mset has different signature
         for (key, value) in string_pairs {
             conn.set(key, &value)?;
@@ -125,7 +128,7 @@ impl CacheManager {
             Some(c) => c,
             None => return Ok(keys.iter().map(|_| None).collect()),
         };
-        
+
         let mut conn = conn_arc.write().await;
         let values: Vec<String> = conn.mget(keys)?;
         Ok(values.into_iter().map(|v| Some(v.into_bytes())).collect())
@@ -137,7 +140,7 @@ impl CacheManager {
             Some(c) => c,
             None => return Ok(0),
         };
-        
+
         let mut conn = conn_arc.write().await;
         // Delete each key individually since mdel doesn't exist
         let mut deleted = 0;
@@ -152,7 +155,7 @@ impl CacheManager {
 
     // Note: The following methods are not available in the current skytable version
     // They are commented out to avoid compilation errors
-    
+
     /*
     /// Increment a counter
     pub async fn increment(&self, key: &str) -> Result<i64> {
@@ -231,7 +234,7 @@ impl CacheManager {
             Some(c) => c,
             None => return Ok(()),
         };
-        
+
         let mut conn = conn_arc.write().await;
         conn.flushdb()?;
         Ok(())
@@ -261,4 +264,4 @@ pub struct CacheStats {
     pub hits: u64,
     /// Cache misses
     pub misses: u64,
-} 
+}

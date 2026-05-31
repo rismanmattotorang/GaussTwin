@@ -21,7 +21,7 @@ pub use spatial_index::{SpatialIndex, SpatialPoint};
 
 use serde::{Deserialize, Serialize};
 use std::fmt;
-use std::ops::{Add, Sub, Mul, Div};
+use std::ops::{Add, Div, Mul, Sub};
 use uuid::Uuid;
 
 /// 3D point representation
@@ -279,28 +279,28 @@ pub mod visualization;
 /// Visualization and rendering utilities for spatial data
 pub mod visualization {
     /// Configuration for animation settings
-    #[derive(Debug, Clone, Copy)] 
+    #[derive(Debug, Clone, Copy)]
     pub struct AnimationConfig;
     /// Configuration for camera settings
-    #[derive(Debug, Clone, Copy)] 
+    #[derive(Debug, Clone, Copy)]
     pub struct CameraConfig;
     /// Configuration for visualization settings
-    #[derive(Debug, Clone, Copy)] 
+    #[derive(Debug, Clone, Copy)]
     pub struct VisualizationConfig;
     /// Main visualizer for spatial data
-    #[derive(Debug, Clone, Copy)] 
+    #[derive(Debug, Clone, Copy)]
     pub struct Visualizer;
     /// Quality settings for rendering
-    #[derive(Debug, Clone, Copy)] 
-    pub enum RenderingQuality { 
+    #[derive(Debug, Clone, Copy)]
+    pub enum RenderingQuality {
         /// Low quality rendering
-        Low, 
+        Low,
         /// Medium quality rendering
-        Medium, 
+        Medium,
         /// High quality rendering
-        High 
+        High,
     }
     /// Easing functions for animations
-    #[derive(Debug, Clone, Copy)] 
+    #[derive(Debug, Clone, Copy)]
     pub enum EasingFunction {}
-} 
+}

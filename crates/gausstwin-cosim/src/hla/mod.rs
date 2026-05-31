@@ -1,5 +1,5 @@
 //! HLA IEEE-1516e Implementation
-//! 
+//!
 //! Provides comprehensive HLA IEEE-1516e support:
 //! - Federation Management
 //! - Declaration Management
@@ -8,10 +8,10 @@
 //! - Data Distribution Management
 //! - Support Services
 
+pub mod ddm;
 pub mod federation;
 pub mod object;
 pub mod time;
-pub mod ddm;
 
 use std::{
     collections::{HashMap, HashSet},
@@ -19,27 +19,22 @@ use std::{
     time::Duration,
 };
 
+use anyhow;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::{broadcast, mpsc, RwLock};
 use tracing::{debug, error, info, warn};
-use anyhow;
 
 use crate::{
     common::{
-        data::DataValue,
-        time::SimulationTime,
-        sync::SyncMode,
-        time::TimeManager,
-        sync::SyncManager,
+        data::DataValue, sync::SyncManager, sync::SyncMode, time::SimulationTime, time::TimeManager,
     },
-    CosimError,
-    Result,
+    CosimError, Result,
 };
 
-pub use self::object::ObjectManager;
 pub use self::ddm::DdmManager;
+pub use self::object::ObjectManager;
 
 /// HLA-specific errors
 #[derive(Error, Debug)]
@@ -162,7 +157,10 @@ impl HlaFederate {
         // Create managers
         let objects = ObjectManager::new();
         let time_manager = Arc::new(RwLock::new(TimeManager::new()));
-        let sync_manager = Arc::new(RwLock::new(SyncManager::new(config.sync_mode, config.num_federates)));
+        let sync_manager = Arc::new(RwLock::new(SyncManager::new(
+            config.sync_mode,
+            config.num_federates,
+        )));
         let ddm = DdmManager::new(&config.data_distribution);
 
         // Create event channel
@@ -181,22 +179,21 @@ impl HlaFederate {
     /// Join federation
     pub async fn join_federation(&mut self) -> Result<()> {
         let mut rti = self.rti.write().await;
-        
+
         // Create/join federation
         rti.create_federation_execution(&self.config.federation_name, &self.config.fom_modules)
             .await?;
-        
-        rti.join_federation_execution(
-            &self.config.federate_name,
-            &self.config.federation_name,
-        ).await?;
+
+        rti.join_federation_execution(&self.config.federate_name, &self.config.federation_name)
+            .await?;
 
         // Initialize time management
         if self.config.time_management.time_constrained {
             rti.enable_time_constrained().await?;
         }
         if self.config.time_management.time_regulating {
-            rti.enable_time_regulation(self.config.time_management.lookahead).await?;
+            rti.enable_time_regulation(self.config.time_management.lookahead)
+                .await?;
         }
 
         Ok(())
@@ -210,22 +207,34 @@ impl HlaFederate {
     }
 
     /// Register object instance
-    pub async fn register_object(&mut self, class_name: &str, attributes: &[&str]) -> Result<ObjectInstanceHandle> {
+    pub async fn register_object(
+        &mut self,
+        class_name: &str,
+        attributes: &[&str],
+    ) -> Result<ObjectInstanceHandle> {
         let mut objects = self.objects.write().await;
         let mut rti = self.rti.write().await;
 
         let handle = rti.register_object_instance(class_name).await?;
-        objects.register_object(handle, class_name, attributes).map_err(|e| CosimError::Other(anyhow::anyhow!(e)))?;
+        objects
+            .register_object(handle, class_name, attributes)
+            .map_err(|e| CosimError::Other(anyhow::anyhow!(e)))?;
 
         Ok(handle)
     }
 
     /// Update object attributes
-    pub async fn update_attributes(&mut self, handle: ObjectInstanceHandle, attributes: HashMap<String, DataValue>) -> Result<()> {
+    pub async fn update_attributes(
+        &mut self,
+        handle: ObjectInstanceHandle,
+        attributes: HashMap<String, DataValue>,
+    ) -> Result<()> {
         let objects = self.objects.read().await;
         let mut rti = self.rti.write().await;
 
-        let attr_values = objects.prepare_attribute_values(handle, attributes).map_err(|e| CosimError::Other(anyhow::anyhow!(e)))?;
+        let attr_values = objects
+            .prepare_attribute_values(handle, attributes)
+            .map_err(|e| CosimError::Other(anyhow::anyhow!(e)))?;
         rti.update_attribute_values(handle, attr_values).await?;
 
         Ok(())
@@ -248,18 +257,25 @@ impl HlaFederate {
         let mut rti = self.rti.write().await;
 
         let handle = rti.create_region(&config.name).await?;
-        ddm.create_region(handle, config).map_err(|e| CosimError::Other(anyhow::anyhow!(e)))?;
+        ddm.create_region(handle, config)
+            .map_err(|e| CosimError::Other(anyhow::anyhow!(e)))?;
 
         Ok(handle)
     }
 
     /// Subscribe to region
-    pub async fn subscribe_region(&mut self, region: RegionHandle, class_name: &str, attributes: &[&str]) -> Result<()> {
+    pub async fn subscribe_region(
+        &mut self,
+        region: RegionHandle,
+        class_name: &str,
+        attributes: &[&str],
+    ) -> Result<()> {
         let ddm = self.ddm.read().await;
         let mut rti = self.rti.write().await;
 
         let attr_handles = rti.get_attribute_handles(class_name, attributes).await?;
-        rti.subscribe_object_class_attributes_with_regions(class_name, region, &attr_handles).await?;
+        rti.subscribe_object_class_attributes_with_regions(class_name, region, &attr_handles)
+            .await?;
 
         Ok(())
     }
@@ -267,24 +283,27 @@ impl HlaFederate {
     /// Process callbacks
     pub async fn process_callbacks(&mut self) -> Result<()> {
         let mut rti = self.rti.write().await;
-        
+
         while let Some(callback) = rti.process_next_callback().await? {
             match callback {
                 RtiCallback::DiscoverObjectInstance { handle, class_name } => {
                     let mut objects = self.objects.write().await;
-                    objects.discover_object(handle, &class_name).map_err(|e| CosimError::Other(anyhow::anyhow!(e)))?;
+                    objects
+                        .discover_object(handle, &class_name)
+                        .map_err(|e| CosimError::Other(anyhow::anyhow!(e)))?;
                 }
                 RtiCallback::ReflectAttributeValues { handle, attributes } => {
                     let mut objects = self.objects.write().await;
-                    objects.reflect_attributes(handle, attributes).map_err(|e| CosimError::Other(anyhow::anyhow!(e)))?;
+                    objects
+                        .reflect_attributes(handle, attributes)
+                        .map_err(|e| CosimError::Other(anyhow::anyhow!(e)))?;
                 }
                 RtiCallback::TimeAdvanceGrant { time } => {
                     let mut time_mgr = self.time.write().await;
                     if !time_mgr.is_advance_safe(time) {
                         return Err(CosimError::TimeSync("Time advance not safe".to_string()));
                     }
-                }
-                // Handle other callbacks...
+                } // Handle other callbacks...
             }
         }
 
@@ -307,13 +326,21 @@ impl RtiAmbassador {
     }
 
     /// Create federation execution
-    async fn create_federation_execution(&mut self, federation_name: &str, fom_modules: &[String]) -> Result<()> {
+    async fn create_federation_execution(
+        &mut self,
+        federation_name: &str,
+        fom_modules: &[String],
+    ) -> Result<()> {
         // TODO: Implement federation creation
         unimplemented!()
     }
 
     /// Join federation execution
-    async fn join_federation_execution(&mut self, federate_name: &str, federation_name: &str) -> Result<()> {
+    async fn join_federation_execution(
+        &mut self,
+        federate_name: &str,
+        federation_name: &str,
+    ) -> Result<()> {
         // TODO: Implement federation join
         unimplemented!()
     }
@@ -337,7 +364,11 @@ impl RtiAmbassador {
     }
 
     /// Update attribute values
-    async fn update_attribute_values(&mut self, handle: ObjectInstanceHandle, values: AttributeValues) -> Result<()> {
+    async fn update_attribute_values(
+        &mut self,
+        handle: ObjectInstanceHandle,
+        values: AttributeValues,
+    ) -> Result<()> {
         // TODO: Implement attribute update
         unimplemented!()
     }
@@ -355,7 +386,11 @@ impl RtiAmbassador {
     }
 
     /// Get attribute handles
-    async fn get_attribute_handles(&mut self, class_name: &str, attributes: &[&str]) -> Result<Vec<AttributeHandle>> {
+    async fn get_attribute_handles(
+        &mut self,
+        class_name: &str,
+        attributes: &[&str],
+    ) -> Result<Vec<AttributeHandle>> {
         // TODO: Implement attribute handle lookup
         unimplemented!()
     }
@@ -398,9 +433,7 @@ enum RtiCallback {
     },
 
     /// Time advance grant
-    TimeAdvanceGrant {
-        time: SimulationTime,
-    },
+    TimeAdvanceGrant { time: SimulationTime },
 }
 
 /// Object instance handle
@@ -435,9 +468,7 @@ pub enum HlaEvent {
     },
 
     /// Time advanced
-    TimeAdvanced {
-        time: SimulationTime,
-    },
+    TimeAdvanced { time: SimulationTime },
 }
 
 #[cfg(test)]
@@ -456,19 +487,15 @@ mod tests {
                 lookahead: Duration::from_millis(100),
             },
             data_distribution: HlaDataDistribution {
-                dimensions: vec![
-                    DimensionConfig {
-                        name: "X".to_string(),
-                        bounds: (0.0, 100.0),
-                        normalization: None,
-                    },
-                ],
-                regions: vec![
-                    RegionConfig {
-                        name: "Region1".to_string(),
-                        ranges: HashMap::new(),
-                    },
-                ],
+                dimensions: vec![DimensionConfig {
+                    name: "X".to_string(),
+                    bounds: (0.0, 100.0),
+                    normalization: None,
+                }],
+                regions: vec![RegionConfig {
+                    name: "Region1".to_string(),
+                    ranges: HashMap::new(),
+                }],
             },
             sync_mode: SyncMode::Conservative {
                 lookahead: std::time::Duration::from_secs(1),
@@ -479,29 +506,44 @@ mod tests {
         };
 
         let mut federate = HlaFederate::new(config).await.unwrap();
-        
+
         // Test federation management
         federate.join_federation().await.unwrap();
-        
+
         // Test object management
-        let handle = federate.register_object("TestObject", &["attr1", "attr2"]).await.unwrap();
-        
+        let handle = federate
+            .register_object("TestObject", &["attr1", "attr2"])
+            .await
+            .unwrap();
+
         let mut attributes = HashMap::new();
         attributes.insert("attr1".to_string(), DataValue::Real(1.0));
-        federate.update_attributes(handle, attributes).await.unwrap();
-        
+        federate
+            .update_attributes(handle, attributes)
+            .await
+            .unwrap();
+
         // Test time management
-        federate.request_time_advance(SimulationTime::new(1, 0.0)).await.unwrap();
-        
+        federate
+            .request_time_advance(SimulationTime::new(1, 0.0))
+            .await
+            .unwrap();
+
         // Test data distribution
-        let region = federate.create_region(&RegionConfig {
-            name: "TestRegion".to_string(),
-            ranges: HashMap::new(),
-        }).await.unwrap();
-        
-        federate.subscribe_region(region, "TestObject", &["attr1"]).await.unwrap();
-        
+        let region = federate
+            .create_region(&RegionConfig {
+                name: "TestRegion".to_string(),
+                ranges: HashMap::new(),
+            })
+            .await
+            .unwrap();
+
+        federate
+            .subscribe_region(region, "TestObject", &["attr1"])
+            .await
+            .unwrap();
+
         // Cleanup
         federate.resign_federation().await.unwrap();
     }
-} 
+}

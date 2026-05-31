@@ -2,7 +2,7 @@
 //!
 //! Advanced distributed simulation capabilities
 
-use crate::{AgentId, error::Result};
+use crate::{error::Result, AgentId};
 use std::collections::HashMap;
 
 #[derive(Debug)]
@@ -65,11 +65,11 @@ impl DistributedSimulation {
             },
         }
     }
-    
+
     pub fn add_node(&mut self, node: SimulationNode) {
         self.nodes.push(node);
     }
-    
+
     pub fn distribute_agents(&mut self, agents: Vec<AgentId>) -> Result<()> {
         // Distribute agents across nodes based on load balancing algorithm
         for agent in agents {
@@ -79,17 +79,19 @@ impl DistributedSimulation {
         }
         Ok(())
     }
-    
+
     fn select_node(&self) -> Result<usize> {
         match self.load_balancer.algorithm {
             LoadBalancingAlgorithm::LeastConnections => {
-                let min_load_node = self.nodes.iter()
+                let min_load_node = self
+                    .nodes
+                    .iter()
                     .enumerate()
                     .min_by_key(|(_, node)| node.current_load)
                     .map(|(idx, _)| idx)
                     .unwrap_or(0);
                 Ok(min_load_node)
-            },
+            }
             _ => Ok(0), // Simplified
         }
     }

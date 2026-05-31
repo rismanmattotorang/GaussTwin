@@ -133,7 +133,12 @@ impl WordLen {
             WordLen::Bit => 1,
             WordLen::Byte | WordLen::Char => 1,
             WordLen::Word | WordLen::Int | WordLen::Counter | WordLen::Timer | WordLen::S5Time => 2,
-            WordLen::DWord | WordLen::DInt | WordLen::Real | WordLen::Time | WordLen::Tod | WordLen::Date => 4,
+            WordLen::DWord
+            | WordLen::DInt
+            | WordLen::Real
+            | WordLen::Time
+            | WordLen::Tod
+            | WordLen::Date => 4,
             WordLen::DateTime => 8,
         }
     }
@@ -371,7 +376,9 @@ impl S7Connector {
 
         let start = Instant::now();
 
-        let value = self.read_area(tag.area, tag.db_number, tag.start, tag.word_len, tag.count).await?;
+        let value = self
+            .read_area(tag.area, tag.db_number, tag.start, tag.word_len, tag.count)
+            .await?;
 
         self.internal_metrics.reads.fetch_add(1, Ordering::Relaxed);
         self.record_latency(start.elapsed()).await;
@@ -405,9 +412,9 @@ impl S7Connector {
         let bytes = match area {
             Area::DB => {
                 let dbs = self.state.data_blocks.read().await;
-                let db = dbs.get(&db_number).ok_or_else(|| {
-                    Error::NotFound(format!("DB{} not found", db_number))
-                })?;
+                let db = dbs
+                    .get(&db_number)
+                    .ok_or_else(|| Error::NotFound(format!("DB{} not found", db_number)))?;
                 let end = start as usize + word_len.size() * count as usize;
                 if end > db.len() {
                     return Err(Error::Protocol("Read beyond DB size".to_string()));
@@ -478,7 +485,8 @@ impl S7Connector {
         let start = Instant::now();
         let bytes = value.as_bytes();
 
-        self.write_area(tag.area, tag.db_number, tag.start, &bytes).await?;
+        self.write_area(tag.area, tag.db_number, tag.start, &bytes)
+            .await?;
 
         self.internal_metrics.writes.fetch_add(1, Ordering::Relaxed);
         self.internal_metrics
@@ -491,13 +499,7 @@ impl S7Connector {
     }
 
     /// Write to an area
-    async fn write_area(
-        &self,
-        area: Area,
-        db_number: u16,
-        start: u32,
-        data: &[u8],
-    ) -> Result<()> {
+    async fn write_area(&self, area: Area, db_number: u16, start: u32, data: &[u8]) -> Result<()> {
         match area {
             Area::DB => {
                 let mut dbs = self.state.data_blocks.write().await;
@@ -535,7 +537,14 @@ impl S7Connector {
         }
 
         Ok(CpuInfo {
-            module_type: format!("S7-{}", if self.s7_config.slot == 1 { "1500" } else { "300" }),
+            module_type: format!(
+                "S7-{}",
+                if self.s7_config.slot == 1 {
+                    "1500"
+                } else {
+                    "300"
+                }
+            ),
             serial_number: "S7-XXXX-XXXX-XXXX".to_string(),
             as_name: "GaussTwin Simulated PLC".to_string(),
             copyright: "Copyright Siemens AG".to_string(),
@@ -603,7 +612,11 @@ impl S7Connector {
         };
 
         Metrics {
-            connections: if self.state.connected.load(Ordering::SeqCst) { 1 } else { 0 },
+            connections: if self.state.connected.load(Ordering::SeqCst) {
+                1
+            } else {
+                0
+            },
             connection_failures: self.internal_metrics.reconnections.load(Ordering::Relaxed),
             messages_sent: self.internal_metrics.writes.load(Ordering::Relaxed),
             messages_received: self.internal_metrics.reads.load(Ordering::Relaxed),
@@ -621,10 +634,7 @@ impl Connector for S7Connector {
     async fn connect(&mut self) -> Result<()> {
         info!(
             "Connecting to S7 PLC at {}:{} (Rack {}, Slot {})",
-            self.s7_config.host,
-            self.s7_config.port,
-            self.s7_config.rack,
-            self.s7_config.slot
+            self.s7_config.host, self.s7_config.port, self.s7_config.rack, self.s7_config.slot
         );
 
         self.state.connected.store(true, Ordering::SeqCst);
@@ -725,7 +735,10 @@ mod tests {
         let tag = S7Tag::db("test_int", 1, 0, WordLen::Int);
 
         // Write value
-        connector.write_tag(&tag, S7Value::Int(12345)).await.unwrap();
+        connector
+            .write_tag(&tag, S7Value::Int(12345))
+            .await
+            .unwrap();
 
         // Read back
         let result = connector.read_tag(&tag).await.unwrap();

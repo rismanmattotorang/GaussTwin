@@ -1,8 +1,11 @@
+use crate::{
+    config::MetricsConfig,
+    error::{Error, Result},
+};
+use metrics::{counter, gauge, histogram, Key, KeyName, Label, Unit};
+use metrics_exporter_prometheus::{Matcher, PrometheusBuilder, PrometheusHandle};
 use std::collections::HashMap;
 use std::sync::{Mutex, OnceLock};
-use metrics::{counter, gauge, histogram, Key, KeyName, Unit, Label};
-use metrics_exporter_prometheus::{Matcher, PrometheusBuilder, PrometheusHandle};
-use crate::{config::MetricsConfig, error::{Error, Result}};
 
 /// The Prometheus recorder is a process-wide singleton: it can be installed as
 /// the global `metrics` recorder exactly once per process. We install it on the
@@ -35,9 +38,9 @@ fn install_or_get_handle(config: &MetricsConfig) -> Result<PrometheusHandle> {
         .iter()
         .fold(builder, |b, (k, v)| b.add_global_label(k, v));
 
-    let handle = builder.install_recorder().map_err(|e| {
-        Error::Configuration(format!("Failed to install metrics recorder: {}", e))
-    })?;
+    let handle = builder
+        .install_recorder()
+        .map_err(|e| Error::Configuration(format!("Failed to install metrics recorder: {}", e)))?;
 
     let _ = GLOBAL_PROM_HANDLE.set(handle.clone());
     Ok(handle)
@@ -73,7 +76,12 @@ impl MetricsManager {
     }
 
     /// Record a counter increment
-    pub fn increment_counter(&self, name: &str, value: u64, labels: Option<HashMap<String, String>>) {
+    pub fn increment_counter(
+        &self,
+        name: &str,
+        value: u64,
+        labels: Option<HashMap<String, String>>,
+    ) {
         let key = self.create_key(name, labels);
         counter!(key.to_string(), value);
     }
@@ -85,7 +93,12 @@ impl MetricsManager {
     }
 
     /// Record a histogram value
-    pub fn observe_histogram(&self, name: &str, value: f64, labels: Option<HashMap<String, String>>) {
+    pub fn observe_histogram(
+        &self,
+        name: &str,
+        value: f64,
+        labels: Option<HashMap<String, String>>,
+    ) {
         let key = self.create_key(name, labels);
         histogram!(key.to_string(), value);
     }
@@ -93,13 +106,13 @@ impl MetricsManager {
     /// Create a metric key with labels
     fn create_key(&self, name: &str, labels: Option<HashMap<String, String>>) -> Key {
         let mut key = Key::from_name(KeyName::from(name.to_string()));
-        
+
         if let Some(labels) = labels {
             for (k, v) in labels {
                 key = key.with_extra_labels(vec![Label::new(k, v)]);
             }
         }
-        
+
         key
     }
 }
@@ -124,10 +137,12 @@ impl<'a> HttpMetrics<'a> {
         ]));
 
         // Record request count
-        self.manager.increment_counter("http_requests_total", 1, labels.clone());
+        self.manager
+            .increment_counter("http_requests_total", 1, labels.clone());
 
         // Record request duration
-        self.manager.observe_histogram("http_request_duration_seconds", duration, labels);
+        self.manager
+            .observe_histogram("http_request_duration_seconds", duration, labels);
     }
 
     /// Record error
@@ -138,7 +153,8 @@ impl<'a> HttpMetrics<'a> {
             ("error".into(), error.into()),
         ]));
 
-        self.manager.increment_counter("http_errors_total", 1, labels);
+        self.manager
+            .increment_counter("http_errors_total", 1, labels);
     }
 }
 
@@ -161,10 +177,12 @@ impl<'a> DatabaseMetrics<'a> {
         ]));
 
         // Record query count
-        self.manager.increment_counter("db_queries_total", 1, labels.clone());
+        self.manager
+            .increment_counter("db_queries_total", 1, labels.clone());
 
         // Record query duration
-        self.manager.observe_histogram("db_query_duration_seconds", duration, labels);
+        self.manager
+            .observe_histogram("db_query_duration_seconds", duration, labels);
     }
 
     /// Record error
@@ -180,9 +198,12 @@ impl<'a> DatabaseMetrics<'a> {
 
     /// Record connection pool stats
     pub fn record_pool_stats(&self, active: u32, idle: u32, max_size: u32) {
-        self.manager.set_gauge("db_connections_active", active as f64, None);
-        self.manager.set_gauge("db_connections_idle", idle as f64, None);
-        self.manager.set_gauge("db_connections_max", max_size as f64, None);
+        self.manager
+            .set_gauge("db_connections_active", active as f64, None);
+        self.manager
+            .set_gauge("db_connections_idle", idle as f64, None);
+        self.manager
+            .set_gauge("db_connections_max", max_size as f64, None);
     }
 }
 
@@ -205,10 +226,12 @@ impl<'a> CacheMetrics<'a> {
         ]));
 
         // Record operation count
-        self.manager.increment_counter("cache_operations_total", 1, labels.clone());
+        self.manager
+            .increment_counter("cache_operations_total", 1, labels.clone());
 
         // Record operation duration
-        self.manager.observe_histogram("cache_operation_duration_seconds", duration, labels);
+        self.manager
+            .observe_histogram("cache_operation_duration_seconds", duration, labels);
     }
 
     /// Record error
@@ -218,15 +241,19 @@ impl<'a> CacheMetrics<'a> {
             ("error".into(), error.into()),
         ]));
 
-        self.manager.increment_counter("cache_errors_total", 1, labels);
+        self.manager
+            .increment_counter("cache_errors_total", 1, labels);
     }
 
     /// Record cache stats
     pub fn record_stats(&self, size: u64, items: u64, hits: u64, misses: u64) {
-        self.manager.set_gauge("cache_size_bytes", size as f64, None);
+        self.manager
+            .set_gauge("cache_size_bytes", size as f64, None);
         self.manager.set_gauge("cache_items", items as f64, None);
-        self.manager.set_gauge("cache_hits_total", hits as f64, None);
-        self.manager.set_gauge("cache_misses_total", misses as f64, None);
+        self.manager
+            .set_gauge("cache_hits_total", hits as f64, None);
+        self.manager
+            .set_gauge("cache_misses_total", misses as f64, None);
     }
 }
 
@@ -254,4 +281,4 @@ mod tests {
         assert!(output.contains("test_gauge"));
         assert!(output.contains("test_histogram"));
     }
-} 
+}
