@@ -80,10 +80,41 @@ APIs evolved but `#[cfg(test)]` modules were never updated:
   already been installed". Now installs once (OnceLock + double-checked lock) and
   reuses the cached handle — a real production bug, not just a test issue.
 
-### Still open (Phase 1 backlog)
-- `gausstwin-data` test drift (64 errors against an evolved store API).
-- `gausstwin-cosim` runtime failures + the `synchronize()` deadlock.
-- `db`, `des`, `fsm`, `integration`, `spaces`, `vec`, `visual` test health unmeasured.
+### Full workspace test baseline (measured 2026-05-31, Phase 1)
+
+`cargo test --workspace --exclude gausstwin-data` (data tests don't compile):
+
+| Crate | Result | Notes |
+|---|---|---|
+| `gausstwin-core` | ✅ 80 pass | green (blocking in CI) |
+| `gausstwin-api` | ✅ 11 pass | green (blocking in CI) |
+| `gausstwin-fsm` | ✅ 9 pass | green (blocking in CI) |
+| `gausstwin-agent` | ✅ 0 tests | compiles; no unit tests |
+| `gausstwin-ai` | ✅ 0 tests | compiles; no unit tests (torch off) |
+| `gausstwin-cli` | ✅ 0 tests | compiles; no unit tests |
+| `gausstwin-integration` | ⚠️ 66 pass, **1 fail** | one fix from green |
+| `gausstwin-des` | ⚠️ 4 pass, **1 fail** | |
+| `gausstwin-db` | ⚠️ 0 pass, **1 fail** | single test, failing |
+| `gausstwin-cosim` | ❌ 4 pass, **3 fail**, 2 ignored | + `synchronize()` deadlock (ignored) |
+| `gausstwin-spaces` | ❌ **2 fail** (`test_memory_pool`, `test_octree`) + 1 hang | `test_spatial_cache` hangs → now `#[ignore]`d |
+| `gausstwin-vec` | ❔ unmeasured | was blocked behind the spaces hang |
+| `gausstwin-visual` | ❔ unmeasured | was blocked behind the spaces hang |
+| `gausstwin-data` | ⛔ tests don't compile | 64 errors vs. evolved store API |
+
+**Green test set = {core, api, fsm}** (plus agent/ai/cli which compile with no
+tests). These are the CI blocking set; it only grows as the backlog clears.
+
+### Phase 1 backlog (ratchet into the blocking set as fixed)
+1. `gausstwin-integration`, `gausstwin-des`, `gausstwin-db` — 1 failing test each
+   (closest to green).
+2. `gausstwin-spaces` — 2 failures + the `test_spatial_cache` hang (now ignored).
+3. `gausstwin-cosim` — 3 failures + the `synchronize()` deadlock (ignored).
+4. `gausstwin-vec`, `gausstwin-visual` — measure once spaces no longer hangs.
+5. `gausstwin-data` — migrate the 64-error test suite to the current store API.
+
+> Two hangs are now `#[ignore]`d with tracked reasons (`cosim::synchronize`,
+> `spaces::SpatialCache`) so `cargo test` completes instead of stalling — these are
+> **real runtime bugs**, not test issues.
 
 ### Implications
 - Several "✅ complete / 80–95%" claims in `PROGRESS.md` are **not** backed by passing
