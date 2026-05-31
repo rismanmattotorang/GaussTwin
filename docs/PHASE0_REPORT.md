@@ -92,17 +92,30 @@ APIs evolved but `#[cfg(test)]` modules were never updated:
 | `gausstwin-des` | ✅ 5 pass | green (blocking in CI) — was 1 fail, fixed |
 | `gausstwin-integration` | ✅ 67 pass | green (blocking in CI) — was 1 fail, fixed |
 | `gausstwin-db` | ✅ compiles (1 integration test `#[ignore]`d) | blocking in CI; test needs live SurrealDB |
+| `gausstwin-spaces` | ✅ 14 pass | green (blocking) — was 2 fail + a hang, all fixed |
+| `gausstwin-vec` | ✅ 7 pass | green (blocking) — was 1 fail (HNSW), fixed |
+| `gausstwin-visual` | ✅ 1 pass | green (blocking) |
 | `gausstwin-agent` | ✅ 0 tests | compiles; no unit tests |
 | `gausstwin-ai` | ✅ 0 tests | compiles; no unit tests (torch off) |
 | `gausstwin-cli` | ✅ 0 tests | compiles; no unit tests |
 | `gausstwin-cosim` | ❌ 4 pass, **3 fail**, 2 ignored | + `synchronize()` deadlock (ignored) |
-| `gausstwin-spaces` | ❌ **2 fail** (`test_memory_pool`, `test_octree`) + 1 hang | `test_spatial_cache` hangs → now `#[ignore]`d |
-| `gausstwin-vec` | ❔ unmeasured | was blocked behind the spaces hang |
-| `gausstwin-visual` | ❔ unmeasured | was blocked behind the spaces hang |
 | `gausstwin-data` | ⛔ tests don't compile | 64 errors vs. evolved store API |
 
-**Green test set (CI blocking) = {core, api, fsm, des, integration, db}** plus
-agent/ai/cli (compile, no tests). The blocking set only grows as the backlog clears.
+**Green test set (CI blocking) = {core, api, fsm, des, integration, db, spaces, vec,
+visual}** plus agent/ai/cli (compile, no tests). Only `cosim` and `data` remain.
+
+#### Phase 2 fixes — spaces/vec real bugs + unsafe audit
+- `spaces::SpatialCache::get` deadlock (DashMap remove while holding the read guard)
+  — the hang is fixed and the test re-enabled.
+- `spaces::HighPerformanceMemoryPool` — allocation accounting + leak fixed; `unsafe`
+  made sound and documented; `Drop` reclaims parked allocations.
+- `spaces::OctreeNode::insert` dropped points in leaf nodes (octree was always empty).
+- `spaces::GridHash` faked query distances from cell corners; now stores positions
+  and tests real distances.
+- `vec::HnswIndex::search` returned `BinaryHeap::into_iter()` (arbitrary order); now
+  sorted nearest-first.
+- `vec` AVX2 intrinsics: added `#[target_feature(enable="avx2")]` + SAFETY docs.
+- Determinism: the shared spatial-index test uses a seeded RNG (reproducible).
 
 #### Fixes that cleared the three 1-failure crates (Phase 1)
 - `des::test_checkpointing` — checkpoints were gated on wall-clock-since-start ≥

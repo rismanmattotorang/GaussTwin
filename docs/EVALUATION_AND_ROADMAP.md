@@ -203,8 +203,11 @@ seed, and benchmarked.**
       `gausstwin-core`. **Done:** feature-gated behind opt-in features (`experimental` +
       per-module); default core is now minimal (62 tests vs. 80, all green). **Pending:**
       extract into their own crates. CI tests both default and `experimental`.
-- [ ] Audit all 42 `unsafe` blocks (SIMD); document safety invariants, add `miri`/fuzz where
-      feasible.
+- [~] Audit `unsafe` blocks; document safety invariants, add `miri`/fuzz where feasible.
+      **Done:** the actual count is ~21 occurrences (mostly SIMD in `spaces`/`vec`, only 1 in
+      core). `vec` AVX2 intrinsics now carry `#[target_feature(enable="avx2")]` + SAFETY docs;
+      `spaces` memory-pool `unsafe` made sound (no leak, `Drop` reclaims) + documented.
+      **Pending:** `miri`/fuzz, and the nightly `std::simd` path in `spaces`.
 - [ ] Property tests (`proptest`) for spaces/scheduler; **determinism/seed-stability test**
       (same seed ⇒ identical trace) — prerequisite for the paper's reproducibility claim.
 - [ ] Criterion benchmarks wired into CI with regression alerts.

@@ -53,7 +53,8 @@ it reaches `1.0.0`. While pre-1.0, minor versions may include breaking changes.
 - `gausstwin-fsm`: fixed the crate-level rustdoc doctest (State API drift).
 
 ### CI green set
-- Blocking test set expanded to {core, api, fsm, des, integration, db}.
+- Blocking test set expanded to {core, api, fsm, des, integration, db, spaces, vec,
+  visual}. Only `cosim` (deadlock) and `data` (tests don't compile) remain.
 
 ### Phase 2 (started) — keep core minimal
 - Feature-gated the speculative `gausstwin-core` modules (`hpc`, `gpu`,

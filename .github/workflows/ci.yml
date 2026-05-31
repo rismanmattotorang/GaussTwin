@@ -47,14 +47,16 @@ jobs:
       - name: Build workspace (default features)
         run: cargo build --workspace
       # Crates whose test suites are green and must not regress. Add crates here as
-      # their test debt is cleared (see docs/PHASE0_REPORT.md "Phase 1 backlog").
-      # Green set: core (80), api (11), fsm (9), des (5), integration (67); db
-      # compiles with its live-SurrealDB test ignored; agent/ai/cli have no tests.
+      # their test debt is cleared (see docs/PHASE0_REPORT.md baseline). Green set:
+      # core, api, fsm, des, integration, spaces, vec, visual; db compiles with its
+      # live-SurrealDB test ignored; agent/ai/cli have no tests. Remaining: cosim
+      # (deadlock) and data (tests don't compile).
       - name: Test (green crates — blocking)
         run: >
           cargo test
           -p gausstwin-core -p gausstwin-api -p gausstwin-fsm
           -p gausstwin-des -p gausstwin-integration -p gausstwin-db
+          -p gausstwin-spaces -p gausstwin-vec -p gausstwin-visual
       # The speculative core modules (hpc/distributed/quantum/blockchain) are opt-in
       # (Phase 2). Test them via the CPU-only `experimental` set so they stay green.
       # `gpu` is excluded (needs a real GPU adapter + heavy wgpu dep).
