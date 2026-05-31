@@ -53,10 +53,37 @@ APIs evolved but `#[cfg(test)]` modules were never updated:
 
 | Crate | Result |
 |---|---|
-| `gausstwin-api` | 9 passed, **2 failed** (`test_server_startup`, `test_server_init`) |
-| `gausstwin-cosim` | **3 failed** (`test_simulation_time`, `test_fmi_instance`, `test_hla_federate`) + **2 hangs** (`test_conservative_sync`, `test_optimistic_sync` — `SyncManager::synchronize` deadlocks). The two hangs are now `#[ignore]`d with a tracked reason so the suite is runnable. |
+| `gausstwin-api` | ✅ **Fixed** — 11 passed, 0 failed (see "Resolved" below) |
+| `gausstwin-cosim` | **3 failed** (`test_simulation_time`, `test_fmi_instance`, `test_hla_federate`) + **2 hangs** (`test_conservative_sync`, `test_optimistic_sync` — `SyncManager::synchronize` deadlocks). The two hangs are now `#[ignore]`d with a tracked reason so the suite is runnable. *(Deferred to Phase 1.)* |
 | `gausstwin-agent`, `-ai`, `-cli` | 0 lib unit tests (test surface is thin) |
 | `db`, `des`, `fsm`, `integration`, `spaces`, `vec`, `visual` | Not yet measured (were blocked behind the cosim hang) |
+
+### Resolved in the Phase 0 follow-up pass
+
+**`gausstwin-core` — now 80 unit + 1 doc test green (was 75/5), stable across runs:**
+- Test-code drift fixed: restored `AgentId::from_raw` as a documented deterministic
+  constructor; migrated `VecN` call sites to the 3D `Vector3` API.
+- Four **real bugs** found once the tests could run:
+  - `AgentArena::deallocate` now reuses freed slots LIFO (immediate reuse).
+  - `ThreadPool::wait_idle` no longer returns before queued work runs (outstanding
+    tasks are now counted from submit time, not worker pick-up).
+  - `FederatedLearning` averaging sizes the aggregate from incoming updates (was
+    always empty because the global model starts with no weights).
+  - `NeuralAgent` off-by-one activation mapping fixed (output layer now applies its
+    configured activation, e.g. Sigmoid, instead of Linear).
+  - `profiler` no longer clobbers the global enable switch at construction (removed
+    cross-test global-state pollution that made `test_basic_timing` flaky).
+
+**`gausstwin-api` — now 11 tests green (was 9/2):**
+- `MetricsManager::new` installed the **process-global** Prometheus recorder on
+  every call; the second `AppState` construction failed with "a recorder has
+  already been installed". Now installs once (OnceLock + double-checked lock) and
+  reuses the cached handle — a real production bug, not just a test issue.
+
+### Still open (Phase 1 backlog)
+- `gausstwin-data` test drift (64 errors against an evolved store API).
+- `gausstwin-cosim` runtime failures + the `synchronize()` deadlock.
+- `db`, `des`, `fsm`, `integration`, `spaces`, `vec`, `visual` test health unmeasured.
 
 ### Implications
 - Several "✅ complete / 80–95%" claims in `PROGRESS.md` are **not** backed by passing
