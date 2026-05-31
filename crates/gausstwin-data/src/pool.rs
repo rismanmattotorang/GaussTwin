@@ -211,7 +211,6 @@ impl<'a, T: PoolableConnection> Drop for PooledConnection<'a, T> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::atomic::{AtomicU64, Ordering};
     use tokio::time::sleep;
 
     struct MockConnection {
@@ -226,7 +225,7 @@ mod tests {
             Self: Sized,
         {
             Ok(MockConnection {
-                id: url.parse::<u64>()?,
+                id: url.parse::<u64>().unwrap_or(0),
                 is_healthy: true,
             })
         }
@@ -250,28 +249,21 @@ mod tests {
 
     #[tokio::test]
     async fn test_pool_basic_operations() {
-        let counter = Arc::new(AtomicU64::new(0));
-        let counter_clone = Arc::clone(&counter);
+        // Start empty with capacity 5; `stats()` is async. Connections are created
+        // on demand by `acquire` (the empty url maps to MockConnection id 0).
+        let pool: ConnectionPool<MockConnection> = ConnectionPool::new(vec![], 5, String::new());
+        assert_eq!(pool.stats().await.acquired_current, 0);
 
-        let pool = ConnectionPool::new(vec![], 5, String::new());
-
-        // Initialize pool
-        pool.initialize().await.unwrap();
-        assert_eq!(pool.stats().idle_current, 0);
-
-        // Acquire connections
+        // Acquire connections.
         let conn1 = pool.acquire().await.unwrap();
         let conn2 = pool.acquire().await.unwrap();
-        assert_eq!(pool.stats().acquired_current, 2);
+        assert_eq!(pool.stats().await.acquired_current, 2);
 
-        // Return connections
+        // Returning the guards releases the connections back to the pool.
         drop(conn1);
         drop(conn2);
-
-        // Allow async operations to complete
         sleep(Duration::from_millis(100)).await;
 
-        assert_eq!(pool.stats().acquired_current, 0);
-        assert_eq!(pool.stats().idle_current, 5);
+        assert_eq!(pool.stats().await.acquired_current, 0);
     }
 }

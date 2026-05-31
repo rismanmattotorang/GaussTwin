@@ -46,43 +46,16 @@ jobs:
             build-essential cmake pkg-config libssl-dev libsasl2-dev protobuf-compiler
       - name: Build workspace (default features)
         run: cargo build --workspace
-      # Crates whose test suites are green and must not regress. Add crates here as
-      # their test debt is cleared (see docs/PHASE0_REPORT.md baseline). Green set:
-      # core, api, fsm, des, integration, spaces, vec, visual; db compiles with its
-      # live-SurrealDB test ignored; agent/ai/cli have no tests. Remaining: cosim
-      # (deadlock) and data (tests don't compile).
-      - name: Test (green crates — blocking)
-        run: >
-          cargo test
-          -p gausstwin-core -p gausstwin-api -p gausstwin-fsm
-          -p gausstwin-des -p gausstwin-integration -p gausstwin-db
-          -p gausstwin-spaces -p gausstwin-vec -p gausstwin-visual
+      # The ENTIRE workspace test suite is now green and must not regress (a few
+      # tests that need external infra — live SurrealDB, FMU/RTI, a GPU adapter —
+      # are #[ignore]d with reasons). agent/ai/cli have no unit tests.
+      - name: Test (workspace — blocking)
+        run: cargo test --workspace
       # The speculative core modules (hpc/distributed/quantum/blockchain) are opt-in
       # (Phase 2). Test them via the CPU-only `experimental` set so they stay green.
       # `gpu` is excluded (needs a real GPU adapter + heavy wgpu dep).
       - name: Test core experimental modules (blocking)
         run: cargo test -p gausstwin-core --features experimental
-
-  # ----- Full workspace tests (ADVISORY until backlog cleared) -----------------
-  test-full:
-    name: test (full workspace — advisory)
-    runs-on: ubuntu-latest
-    continue-on-error: true
-    steps:
-      - uses: actions/checkout@v4
-      - uses: Swatinem/rust-cache@v2
-      - name: Install system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            build-essential cmake pkg-config libssl-dev libsasl2-dev protobuf-compiler
-      # gausstwin-data test code is mid-migration (see PHASE0_REPORT.md); excluded
-      # until it compiles. RUSTFLAGS relaxed here so advisory signal isn't drowned
-      # by warnings.
-      - name: Test full workspace
-        env:
-          RUSTFLAGS: ""
-        run: cargo test --workspace --exclude gausstwin-data --no-fail-fast
 
   # ----- Clippy (ADVISORY: ratchet to blocking once warnings are cleared) ------
   clippy:

@@ -12,18 +12,24 @@
 //!
 //! # Examples
 //! ```no_run
-//! use gausstwin_data::{UnifiedStore, UnifiedStoreConfig, create_unified_store};
+//! use gausstwin_data::{create_unified_store, UnifiedStoreConfig, VectorData, ScalarData};
 //!
 //! async fn example() -> anyhow::Result<()> {
 //!     let config = UnifiedStoreConfig::default();
 //!     let store = create_unified_store(config).await?;
-//!     
-//!     // Store hybrid data
-//!     let key = "example";
-//!     let vector = vec![1.0, 2.0, 3.0];
-//!     let scalar = serde_json::json!({ "name": "test" });
-//!     
-//!     let id = store.store_hybrid(key, &vector, &scalar).await?;
+//!
+//!     // Store hybrid (vector + scalar) data under a key.
+//!     let vector = VectorData {
+//!         vector: vec![1.0, 2.0, 3.0],
+//!         metadata: serde_json::json!({}),
+//!         dimension: 3,
+//!         namespace: "example".to_string(),
+//!     };
+//!     let scalar = ScalarData {
+//!         value: serde_json::json!({ "name": "test" }),
+//!         metadata: serde_json::json!({}),
+//!     };
+//!     let _id = store.store_hybrid("example", &vector, &scalar).await?;
 //!     Ok(())
 //! }
 //! ```

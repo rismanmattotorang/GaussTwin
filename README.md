@@ -73,11 +73,13 @@ coverage is being established crate-by-crate — see roadmap):
   spatial indexing & pathfinding, integration connectors, visualization, agent
   domain models.
 
-**Known backlog (tracked, not yet working):**
-- `gausstwin-data` test suite is mid-migration (does not compile yet).
-- `gausstwin-cosim` has runtime test failures and a `synchronize()` deadlock.
+**Test status:** the **entire workspace test suite is green** (CI gate:
+`cargo test --workspace`). A few tests requiring external infrastructure — a live
+SurrealDB, FMU/RTI runtimes, a GPU adapter — are `#[ignore]`d with reasons.
+
+**Known backlog (tracked):**
 - Language bindings (Python/TS) and the speculative modules (`gpu`, `quantum`,
-  `blockchain`, `distributed`) are experimental.
+  `blockchain`, `distributed`) are experimental / feature-gated.
 
 > ⚠️ The previous version of this section listed most features as "✅ complete".
 > Those claims were not backed by a passing build or tests and have been replaced

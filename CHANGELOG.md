@@ -53,8 +53,17 @@ it reaches `1.0.0`. While pre-1.0, minor versions may include breaking changes.
 - `gausstwin-fsm`: fixed the crate-level rustdoc doctest (State API drift).
 
 ### CI green set
-- Blocking test set expanded to {core, api, fsm, des, integration, db, spaces, vec,
-  visual}. Only `cosim` (deadlock) and `data` (tests don't compile) remain.
+- **The entire workspace test suite is now green** — the blocking CI gate is
+  `cargo test --workspace`. Tests needing external infra (live SurrealDB, FMU/RTI,
+  a GPU adapter) are `#[ignore]`d with reasons.
+
+### Phase 1 (last red crates → green)
+- `gausstwin-cosim`: fixed the `synchronize()` deadlock (removed a vestigial
+  multi-party `Barrier` with no concurrent parties; fire-and-forget `SyncEvent`
+  broadcasts); epsilon float comparison; `#[ignore]`d the unimplemented FMU/RTI tests.
+- `gausstwin-data`: fixed a real `LruCache::put` deadlock (it re-acquired its own
+  write locks via `evict_lru`); `MetricsCollector::record_operation` now updates its
+  snapshot; migrated the integration + unit tests from a long-stale types API.
 
 ### Phase 2 (determinism)
 - `StandardModel` now seeds its random scheduler from `ModelConfig::seed`

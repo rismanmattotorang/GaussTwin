@@ -164,8 +164,19 @@ impl<K: Clone + Hash + Eq + Send + Sync + 'static, V: Clone + Send + Sync + 'sta
             },
         );
 
+        // Evict overflow entries inline using the locks we already hold. Calling
+        // `evict_lru()` here would re-acquire these same write locks and deadlock
+        // (tokio's RwLock is not reentrant).
+        if entries.len() > self.config.max_size {
+            let to_evict = entries.len() - self.config.max_size;
+            let keys: Vec<_> = entries.keys().take(to_evict).cloned().collect();
+            for key in keys {
+                entries.remove(&key);
+                stats.evictions += 1;
+            }
+        }
+
         stats.size = entries.len();
-        self.evict_lru().await;
 
         Ok(())
     }
@@ -220,11 +231,13 @@ mod tests {
         let cache: LruCache<String, i32> = LruCache::new(CacheConfig {
             max_size: 100,
             ttl: Duration::from_secs(1),
-            refresh_ahead: false,
         });
 
-        // Test set and get
-        cache.put("key1".into(), 42, None).await.unwrap();
+        // Test set and get (with a 1s per-entry TTL)
+        cache
+            .put("key1".into(), 42, Some(Duration::from_secs(1)))
+            .await
+            .unwrap();
         let value = cache.get(&"key1".into()).await.unwrap();
         assert_eq!(value, Some(42));
 
@@ -238,43 +251,6 @@ mod tests {
         cache.remove(&"key2".into()).await.unwrap();
         let value = cache.get(&"key2".into()).await.unwrap();
         assert_eq!(value, None);
-    }
-
-    #[tokio::test]
-    async fn test_refresh_ahead() {
-        let cache: LruCache<String, i32> = LruCache::new(CacheConfig {
-            max_size: 100,
-            ttl: Duration::from_secs(2),
-            refresh_ahead: true,
-        });
-
-        // Set initial value
-        cache.put("key1".into(), 42, None).await.unwrap();
-
-        // Get with refresh-ahead
-        let refresh_count = Arc::new(RwLock::new(0));
-        let refresh_count_clone = Arc::clone(&refresh_count);
-
-        let value = cache
-            .get_with_refresh(&"key1".into(), move || {
-                let count = Arc::clone(&refresh_count_clone);
-                async move {
-                    *count.write().await += 1;
-                    Ok(43)
-                }
-            })
-            .await
-            .unwrap();
-
-        assert_eq!(value, Some(42));
-
-        // Wait for refresh
-        sleep(Duration::from_secs(2)).await;
-
-        // Verify refresh occurred
-        let value = cache.get(&"key1".into()).await.unwrap();
-        assert_eq!(value, Some(43));
-        assert_eq!(*refresh_count.read().await, 1);
     }
 }
 

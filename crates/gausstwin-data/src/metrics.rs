@@ -36,6 +36,18 @@ impl MetricsCollector {
 
     /// Record operation metrics
     pub fn record_operation(&self, operation: &str, duration: Duration, success: bool) {
+        // Update the collector's own snapshot (consistent with record_*_operation),
+        // so `get_metrics()` reflects recorded operations.
+        {
+            let mut metrics = self.metrics.write();
+            metrics.total_operations += 1;
+            if success {
+                metrics.successful_operations += 1;
+            } else {
+                metrics.failed_operations += 1;
+            }
+        }
+
         let duration_ms = duration.as_millis() as f64;
         metrics::histogram!("data_operation_duration_ms", duration_ms, "operation" => operation.to_string());
         metrics::counter!("data_operation_total", 1, "operation" => operation.to_string(), "success" => success.to_string());
@@ -110,7 +122,7 @@ mod tests {
         let collector = MetricsCollector::new(MetricsConfig {
             enabled: true,
             prefix: "test".into(),
-            interval: Duration::from_secs(1),
+            report_interval: Duration::from_secs(1),
         });
 
         // Record successful operation
