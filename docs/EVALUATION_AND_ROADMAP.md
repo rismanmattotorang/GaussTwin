@@ -199,8 +199,10 @@ checkout on a pinned toolchain.**
 **Exit gate: core simulation runtime is panic-free on bad input, deterministic under a fixed
 seed, and benchmarked.**
 - [ ] Drive library-code `.unwrap()`/`panic!` to ~0; thread `Result` + `thiserror` everywhere.
-- [ ] Split speculative modules (`gpu`, `quantum`, `blockchain`, `distributed`, `hpc`) out of
-      `gausstwin-core` into their own feature-gated crates; keep core minimal and rock-solid.
+- [~] Split speculative modules (`gpu`, `quantum`, `blockchain`, `distributed`, `hpc`) out of
+      `gausstwin-core`. **Done:** feature-gated behind opt-in features (`experimental` +
+      per-module); default core is now minimal (62 tests vs. 80, all green). **Pending:**
+      extract into their own crates. CI tests both default and `experimental`.
 - [ ] Audit all 42 `unsafe` blocks (SIMD); document safety invariants, add `miri`/fuzz where
       feasible.
 - [ ] Property tests (`proptest`) for spaces/scheduler; **determinism/seed-stability test**

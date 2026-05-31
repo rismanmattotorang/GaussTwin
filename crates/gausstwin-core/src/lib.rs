@@ -77,11 +77,31 @@ mod tests {
     }
 }
 
+// --- Speculative / breadth modules (opt-in; see the `experimental` feature) ---
+// These are excluded from the minimal default build so the hardened core stays
+// small. Enable with `--features experimental` (or the individual feature).
+
 /// Advanced high-performance computing module
+#[cfg(feature = "hpc")]
 pub mod hpc;
 
 /// GPU acceleration and CUDA integration
+#[cfg(feature = "gpu")]
 pub mod gpu;
+
+/// Distributed computing and federation
+#[cfg(feature = "distributed")]
+pub mod distributed;
+
+/// Quantum-inspired algorithms
+#[cfg(feature = "quantum")]
+pub mod quantum;
+
+/// Blockchain integration for audit trails
+#[cfg(feature = "blockchain")]
+pub mod blockchain;
+
+// --- Always-on core modules ---
 
 /// Machine learning and AI integration
 pub mod ai;
@@ -91,15 +111,6 @@ pub mod spatial;
 
 /// Real-time streaming and data ingestion
 pub mod streaming;
-
-/// Distributed computing and federation
-pub mod distributed;
-
-/// Quantum-inspired algorithms
-pub mod quantum;
-
-/// Blockchain integration for audit trails
-pub mod blockchain;
 
 /// Advanced visualization and rendering
 pub mod viz;

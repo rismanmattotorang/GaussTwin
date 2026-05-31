@@ -14,9 +14,18 @@ default = ["std", "parallel"]
 std = []
 no_std = []
 parallel = ["dep:rayon", "dep:crossbeam-utils", "dep:crossbeam-channel", "dep:crossbeam-queue"]
-gpu = ["dep:wgpu", "dep:bytemuck"]
 rayon = ["dep:rayon"]
 num_cpus = ["dep:num_cpus"]
+
+# Speculative / breadth modules. These are opt-in and NOT part of the minimal,
+# hardened default core (Phase 2). `experimental` is the CPU-only, CI-testable set;
+# `gpu` is kept separate because it needs a real GPU adapter at runtime.
+experimental = ["hpc", "distributed", "quantum", "blockchain"]
+hpc = ["parallel"]
+gpu = ["dep:wgpu", "dep:bytemuck"]
+distributed = []
+quantum = []
+blockchain = []
 
 [dependencies]
 # Core dependencies from workspace

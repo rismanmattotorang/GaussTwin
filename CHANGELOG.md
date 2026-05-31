@@ -55,6 +55,14 @@ it reaches `1.0.0`. While pre-1.0, minor versions may include breaking changes.
 ### CI green set
 - Blocking test set expanded to {core, api, fsm, des, integration, db}.
 
+### Phase 2 (started) — keep core minimal
+- Feature-gated the speculative `gausstwin-core` modules (`hpc`, `gpu`,
+  `distributed`, `quantum`, `blockchain`) behind opt-in Cargo features. The default
+  build is now the minimal hardened core (62 tests); `--features experimental`
+  enables the CPU-testable set (75 tests); `gpu` is separate (needs a GPU adapter).
+  These modules aren't referenced by any other crate, so the default surface
+  shrinks with no downstream impact. CI tests both default and `experimental`.
+
 ### Removed
 - Dead dependencies: `milvus-sdk-rust` (unused; also forced `protoc`), `smartcore`,
   `ndarray-linalg` (forced system OpenBLAS).

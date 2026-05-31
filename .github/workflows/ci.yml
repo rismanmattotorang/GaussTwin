@@ -55,6 +55,11 @@ jobs:
           cargo test
           -p gausstwin-core -p gausstwin-api -p gausstwin-fsm
           -p gausstwin-des -p gausstwin-integration -p gausstwin-db
+      # The speculative core modules (hpc/distributed/quantum/blockchain) are opt-in
+      # (Phase 2). Test them via the CPU-only `experimental` set so they stay green.
+      # `gpu` is excluded (needs a real GPU adapter + heavy wgpu dep).
+      - name: Test core experimental modules (blocking)
+        run: cargo test -p gausstwin-core --features experimental
 
   # ----- Full workspace tests (ADVISORY until backlog cleared) -----------------
   test-full:
