@@ -554,6 +554,8 @@ mod tests {
         let mut sync_mgr = SyncManager::new(
             SyncMode::Conservative {
                 lookahead: Duration::from_secs(1),
+                min_step: Duration::from_millis(100),
+                max_lag: Duration::from_secs(5),
             },
             2,
         );
@@ -586,6 +588,8 @@ mod tests {
         let mut sync_mgr = SyncManager::new(
             SyncMode::Optimistic {
                 max_rollback: Duration::from_secs(5),
+                state_save_interval: Duration::from_millis(500),
+                antimessage_policy: AntiMessagePolicy::Aggressive,
             },
             2,
         );

@@ -470,7 +470,11 @@ mod tests {
                     },
                 ],
             },
-            sync_mode: SyncMode::None,
+            sync_mode: SyncMode::Conservative {
+                lookahead: std::time::Duration::from_secs(1),
+                min_step: std::time::Duration::from_millis(100),
+                max_lag: std::time::Duration::from_secs(5),
+            },
             num_federates: 0,
         };
 

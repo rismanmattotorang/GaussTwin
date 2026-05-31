@@ -165,27 +165,26 @@ model.run(1000);
 
 ## ⚙️ Build Instructions
 
-### Build All Libraries (Workspace)
-From the project root:
-```sh
-cargo build --lib
-```
-This will build all core libraries and crates in the workspace.
+> 📖 **See [`docs/BUILD.md`](docs/BUILD.md) for the authoritative, up-to-date build
+> guide** — system prerequisites, optional features, and how to build the bindings/UIs.
 
-### Build the CLI Binary
-From the `src` directory:
-```sh
-cd src
-cargo build --bin gausstwin
-```
-This will build the CLI binary with all required dependencies.
+The default workspace build is light and hermetic (no network-fetched native blobs):
 
-### Build Everything (Advanced)
-If you want to build both libraries and the CLI in one go, run:
 ```sh
-cargo build --all
+# From the project root:
+cargo build --workspace
+cargo test  --workspace
 ```
-> Note: If you encounter dependency issues for the CLI, build it from the `src` directory as shown above.
+
+The libtorch-backed ML stack is opt-in behind a feature flag:
+
+```sh
+cargo build -p gausstwin-ai --features torch   # requires libtorch
+```
+
+> **Prerequisites:** a C toolchain, `cmake`, `pkg-config`, `libssl-dev`,
+> `libsasl2-dev`, and `protobuf-compiler` (for gRPC). See `docs/BUILD.md` for the
+> exact package list.
 
 ## 📚 Documentation
 
