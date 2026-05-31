@@ -89,28 +89,36 @@ APIs evolved but `#[cfg(test)]` modules were never updated:
 | `gausstwin-core` | ✅ 80 pass | green (blocking in CI) |
 | `gausstwin-api` | ✅ 11 pass | green (blocking in CI) |
 | `gausstwin-fsm` | ✅ 9 pass | green (blocking in CI) |
+| `gausstwin-des` | ✅ 5 pass | green (blocking in CI) — was 1 fail, fixed |
+| `gausstwin-integration` | ✅ 67 pass | green (blocking in CI) — was 1 fail, fixed |
+| `gausstwin-db` | ✅ compiles (1 integration test `#[ignore]`d) | blocking in CI; test needs live SurrealDB |
 | `gausstwin-agent` | ✅ 0 tests | compiles; no unit tests |
 | `gausstwin-ai` | ✅ 0 tests | compiles; no unit tests (torch off) |
 | `gausstwin-cli` | ✅ 0 tests | compiles; no unit tests |
-| `gausstwin-integration` | ⚠️ 66 pass, **1 fail** | one fix from green |
-| `gausstwin-des` | ⚠️ 4 pass, **1 fail** | |
-| `gausstwin-db` | ⚠️ 0 pass, **1 fail** | single test, failing |
 | `gausstwin-cosim` | ❌ 4 pass, **3 fail**, 2 ignored | + `synchronize()` deadlock (ignored) |
 | `gausstwin-spaces` | ❌ **2 fail** (`test_memory_pool`, `test_octree`) + 1 hang | `test_spatial_cache` hangs → now `#[ignore]`d |
 | `gausstwin-vec` | ❔ unmeasured | was blocked behind the spaces hang |
 | `gausstwin-visual` | ❔ unmeasured | was blocked behind the spaces hang |
 | `gausstwin-data` | ⛔ tests don't compile | 64 errors vs. evolved store API |
 
-**Green test set = {core, api, fsm}** (plus agent/ai/cli which compile with no
-tests). These are the CI blocking set; it only grows as the backlog clears.
+**Green test set (CI blocking) = {core, api, fsm, des, integration, db}** plus
+agent/ai/cli (compile, no tests). The blocking set only grows as the backlog clears.
 
-### Phase 1 backlog (ratchet into the blocking set as fixed)
-1. `gausstwin-integration`, `gausstwin-des`, `gausstwin-db` — 1 failing test each
-   (closest to green).
-2. `gausstwin-spaces` — 2 failures + the `test_spatial_cache` hang (now ignored).
-3. `gausstwin-cosim` — 3 failures + the `synchronize()` deadlock (ignored).
-4. `gausstwin-vec`, `gausstwin-visual` — measure once spaces no longer hangs.
-5. `gausstwin-data` — migrate the 64-error test suite to the current store API.
+#### Fixes that cleared the three 1-failure crates (Phase 1)
+- `des::test_checkpointing` — checkpoints were gated on wall-clock-since-start ≥
+  interval, so sub-interval runs produced none; now tracks time since the last
+  checkpoint and always leaves a final checkpoint when enabled.
+- `integration::blockchain::ethereum::test_deploy_contract` — `1u128 << 160`
+  overflowed (shift ≥ 128 bits) and panicked in debug; removed the meaningless
+  modulo (the `{:040x}` format already yields a 20-byte address).
+- `db::test_enterprise_features` — connects to a live SurrealDB; `#[ignore]`d with a
+  reason (run with `--ignored`; Phase 3 wires testcontainers).
+
+### Remaining Phase 1 backlog (ratchet into the blocking set as fixed)
+1. `gausstwin-spaces` — 2 failures + the `test_spatial_cache` hang (now ignored).
+2. `gausstwin-cosim` — 3 failures + the `synchronize()` deadlock (ignored).
+3. `gausstwin-vec`, `gausstwin-visual` — measure once spaces no longer hangs.
+4. `gausstwin-data` — migrate the 64-error test suite to the current store API.
 
 > Two hangs are now `#[ignore]`d with tracked reasons (`cosim::synchronize`,
 > `spaces::SpatialCache`) so `cargo test` completes instead of stalling — these are

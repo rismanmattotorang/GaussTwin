@@ -48,10 +48,13 @@ jobs:
         run: cargo build --workspace
       # Crates whose test suites are green and must not regress. Add crates here as
       # their test debt is cleared (see docs/PHASE0_REPORT.md "Phase 1 backlog").
-      # Baseline 2026-05-31: core (80), api (11), fsm (9) green; agent/ai/cli compile
-      # with no unit tests.
+      # Green set: core (80), api (11), fsm (9), des (5), integration (67); db
+      # compiles with its live-SurrealDB test ignored; agent/ai/cli have no tests.
       - name: Test (green crates — blocking)
-        run: cargo test -p gausstwin-core -p gausstwin-api -p gausstwin-fsm
+        run: >
+          cargo test
+          -p gausstwin-core -p gausstwin-api -p gausstwin-fsm
+          -p gausstwin-des -p gausstwin-integration -p gausstwin-db
 
   # ----- Full workspace tests (ADVISORY until backlog cleared) -----------------
   test-full:

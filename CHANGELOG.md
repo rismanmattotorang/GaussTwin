@@ -44,6 +44,16 @@ it reaches `1.0.0`. While pre-1.0, minor versions may include breaking changes.
 - `gausstwin-api`: `MetricsManager` installs the process-global Prometheus recorder
   exactly once (was failing on the second `AppState` construction). 11 tests green.
 - `gausstwin-cosim`: stale `SyncMode` test constructions updated to compile.
+- `gausstwin-des`: checkpointing now produces checkpoints for short runs and tracks
+  time since the last checkpoint (was gated on wall-clock-since-start).
+- `gausstwin-integration`: Ethereum mock `deploy_contract` no longer panics on
+  `1u128 << 160` shift overflow.
+- `gausstwin-db`: crate-level rustdoc example imports `DatabaseError`; the
+  live-SurrealDB integration test is `#[ignore]`d (run with `--ignored`).
+- `gausstwin-fsm`: fixed the crate-level rustdoc doctest (State API drift).
+
+### CI green set
+- Blocking test set expanded to {core, api, fsm, des, integration, db}.
 
 ### Removed
 - Dead dependencies: `milvus-sdk-rust` (unused; also forced `protoc`), `smartcore`,

@@ -459,10 +459,11 @@ impl EthereumConnector {
 
         let start = Instant::now();
 
-        let contract_address = Address::new(&format!(
-            "0x{:040x}",
-            uuid::Uuid::new_v4().as_u128() % (1u128 << 160)
-        ));
+        // Derive a mock 20-byte (160-bit) address from a random UUID. A u128 is
+        // 128 bits (32 hex digits); `{:040x}` zero-pads to the full 40-hex-digit
+        // address width. (The previous `% (1u128 << 160)` overflowed — a u128
+        // cannot be shifted by 160 bits — and panicked in debug builds.)
+        let contract_address = Address::new(&format!("0x{:040x}", uuid::Uuid::new_v4().as_u128()));
 
         let mut data = bytecode.clone();
         if let Some(args) = constructor_args {
