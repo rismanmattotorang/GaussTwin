@@ -15,6 +15,7 @@ members = [
     "crates/gausstwin-fsm",
     "crates/gausstwin-integration",
     "crates/gausstwin-spaces",
+    "crates/gausstwin-ir",
 ]
 # The minimum-viable v0.x product surface (Phase 3 consolidation): the simulation
 # engine + serving stack. Bare `cargo build`/`test`/`clippy` operate on these (and
@@ -29,6 +30,7 @@ default-members = [
     "crates/gausstwin-des",
     "crates/gausstwin-fsm",
     "crates/gausstwin-spaces",
+    "crates/gausstwin-ir",
 ]
 exclude = [
     "ui/desktop/src-tauri",

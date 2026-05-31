@@ -1,0 +1,18 @@
+[package]
+name = "gausstwin-ir"
+version = { workspace = true }
+edition = { workspace = true }
+authors = { workspace = true }
+description = "GaussIR: a typed intermediate representation for digital-twin models, with deterministic validators (the 'certified compilation' acceptance gate)"
+license = { workspace = true }
+repository = { workspace = true }
+keywords = ["digital-twin", "ir", "validation", "simulation", "compiler"]
+categories = ["simulation", "science", "data-structures"]
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }

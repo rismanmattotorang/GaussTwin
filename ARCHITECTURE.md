@@ -17,6 +17,7 @@ long tail; the full set is still built and tested via `--workspace` (and in CI).
 | `gausstwin-fsm` | finite state machines + system dynamics |
 | `gausstwin-agent` | BDI / cognitive / reactive agent architectures |
 | `gausstwin-api` | REST / GraphQL / gRPC / WebSocket serving |
+| `gausstwin-ir` | GaussIR typed IR + deterministic validators (the "certified compilation" gate) |
 | `gausstwin-cli` | command-line entry point |
 
 > The MVP transitively pulls the data/serving plane (`gausstwin-{data,db,vec,ai,visual}`)

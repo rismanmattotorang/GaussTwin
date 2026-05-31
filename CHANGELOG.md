@@ -52,6 +52,16 @@ it reaches `1.0.0`. While pre-1.0, minor versions may include breaking changes.
   live-SurrealDB integration test is `#[ignore]`d (run with `--ignored`).
 - `gausstwin-fsm`: fixed the crate-level rustdoc doctest (State API drift).
 
+### Phase 4 (GaussIR — the paper's differentiator)
+- New **`gausstwin-ir`** crate: the **GaussIR** typed intermediate representation
+  (entities, attributes/types, snapshot instances + values, scenario, constraints, and
+  a dimensional `Unit` system) plus **deterministic validators** — the paper's
+  "certified agentic compilation" acceptance gate, which ships before any LLM.
+  `validate()` runs schema → type → unit → constraint passes and returns a
+  deterministically-ordered `ValidationReport` (`is_valid()` is the certification
+  predicate). 2 unit + 13 integration + 1 doc test, incl. a determinism test and JSON
+  round-trip. Added to the MVP `default-members`.
+
 ### Phase 3 (consolidation)
 - Defined the **minimum-viable v0.x surface** via Cargo `default-members`
   (`core, spaces, des, fsm, agent, api, cli`). Bare `cargo build`/`test`/`clippy` now

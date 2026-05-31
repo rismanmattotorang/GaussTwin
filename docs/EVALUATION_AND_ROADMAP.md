@@ -260,12 +260,18 @@ seed, and benchmarked.**
 ### Phase 4 — Restore the paper's differentiator (GaussIR vertical slice) *(6–8 weeks)*
 **Exit gate: one end-to-end demo — Excel snapshot → validators → GaussIR → Rust codegen → run →
 web animation — works and is reproducible.**
-- [ ] Define **GaussIR** schema (typed IR: entities, snapshots, scenarios, units, constraints) —
-      the paper's §VI gives the design goals and core schema.
-- [ ] Implement **deterministic validators** (schema/type/unit/constraint) as the acceptance
-      gate — this is the paper's "certified agentic compilation" core, and it is *deterministic*,
-      so it can ship before any LLM.
-- [ ] Codegen GaussIR → the hardened Rust runtime for **one** paradigm end-to-end.
+- [x] Define **GaussIR** schema (typed IR: entities, snapshots, scenarios, units, constraints).
+      **Done:** the new `gausstwin-ir` crate — `Entity`/`Attribute`/`AttributeType`,
+      `Snapshot`/`EntityInstance`/`Value`, `Scenario`, `Constraint`, and a dimensional `Unit`
+      system (`Dimension` as SI base-exponents). Fully `serde`-serializable (JSON authoring).
+- [x] Implement **deterministic validators** (schema/type/unit/constraint) as the acceptance
+      gate — the paper's "certified agentic compilation" core, deterministic, shipped before any
+      LLM. **Done:** `gausstwin_ir::validate` runs four passes (schema → type → unit →
+      constraint) producing a deterministically-ordered `ValidationReport`; `is_valid()` is the
+      certification predicate. 13 integration tests incl. a determinism test (same doc ⇒
+      identical diagnostics) + JSON round-trip.
+- [ ] Codegen GaussIR → the hardened Rust runtime for **one** paradigm end-to-end. *(next: lower
+      a certified GaussIR doc into a `gausstwin-core` `Model` + agents.)*
 - [ ] *Then* add the LLM-proposes layer behind the deterministic gate (LLM optional, validators
       mandatory). Defer Julia/Agents.jl and full MARL-in-the-loop to a later phase.
 
