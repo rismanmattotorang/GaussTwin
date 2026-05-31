@@ -641,7 +641,7 @@ fn get_rss() -> Option<usize> {
     {
         std::fs::read_to_string("/proc/self/statm")
             .ok()
-            .and_then(|s| s.split_whitespace().nth(1))
+            .and_then(|s| s.split_whitespace().nth(1).map(|f| f.to_string()))
             .and_then(|s| s.parse::<usize>().ok())
             .map(|pages| pages * 4096) // Page size usually 4KB
     }
@@ -657,7 +657,7 @@ fn get_vms() -> Option<usize> {
     {
         std::fs::read_to_string("/proc/self/statm")
             .ok()
-            .and_then(|s| s.split_whitespace().next())
+            .and_then(|s| s.split_whitespace().next().map(|f| f.to_string()))
             .and_then(|s| s.parse::<usize>().ok())
             .map(|pages| pages * 4096)
     }
