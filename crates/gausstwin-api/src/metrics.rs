@@ -1,7 +1,47 @@
 use std::collections::HashMap;
+use std::sync::{Mutex, OnceLock};
 use metrics::{counter, gauge, histogram, Key, KeyName, Unit, Label};
 use metrics_exporter_prometheus::{Matcher, PrometheusBuilder, PrometheusHandle};
 use crate::{config::MetricsConfig, error::{Error, Result}};
+
+/// The Prometheus recorder is a process-wide singleton: it can be installed as
+/// the global `metrics` recorder exactly once per process. We install it on the
+/// first `MetricsManager::new` and cache the resulting handle so that subsequent
+/// constructions (additional servers, test cases, re-initialization) reuse it
+/// instead of failing with "a recorder has already been installed".
+static GLOBAL_PROM_HANDLE: OnceLock<PrometheusHandle> = OnceLock::new();
+static INSTALL_LOCK: Mutex<()> = Mutex::new(());
+
+/// Install the global Prometheus recorder once, returning a clone of the shared
+/// handle. Uses double-checked locking so concurrent callers don't race on the
+/// one-shot global install.
+fn install_or_get_handle(config: &MetricsConfig) -> Result<PrometheusHandle> {
+    if let Some(handle) = GLOBAL_PROM_HANDLE.get() {
+        return Ok(handle.clone());
+    }
+
+    let _guard = INSTALL_LOCK
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+
+    // Re-check now that we hold the lock: another caller may have installed it.
+    if let Some(handle) = GLOBAL_PROM_HANDLE.get() {
+        return Ok(handle.clone());
+    }
+
+    let builder = PrometheusBuilder::new();
+    let builder = config
+        .labels
+        .iter()
+        .fold(builder, |b, (k, v)| b.add_global_label(k, v));
+
+    let handle = builder.install_recorder().map_err(|e| {
+        Error::Configuration(format!("Failed to install metrics recorder: {}", e))
+    })?;
+
+    let _ = GLOBAL_PROM_HANDLE.set(handle.clone());
+    Ok(handle)
+}
 
 /// Metrics manager for handling Prometheus metrics
 pub struct MetricsManager {
@@ -14,15 +54,8 @@ pub struct MetricsManager {
 impl MetricsManager {
     /// Create a new metrics manager
     pub fn new(config: &MetricsConfig) -> Result<Self> {
-        let builder = PrometheusBuilder::new();
-        
-        // Add global labels
-        let builder = config.labels.iter().fold(builder, |b, (k, v)| {
-            b.add_global_label(k, v)
-        });
-        
-        let handle = builder.install_recorder().map_err(|e| Error::Configuration(format!("Failed to install metrics recorder: {}", e)))?;
-        
+        let handle = install_or_get_handle(config)?;
+
         Ok(Self {
             handle,
             config: config.clone(),
