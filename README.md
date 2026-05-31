@@ -56,42 +56,32 @@ cd ui/tui && cargo run --release
 
 ## 📊 Implementation Status
 
-### Completed Features
-```rust
-✅ Core space management system
-✅ Basic agent framework  
-✅ Python bindings with NumPy
-✅ TypeScript bindings with WASM
-✅ Grid, continuous, and graph spaces
-✅ Advanced pathfinding (A*, Dijkstra, HPA*, D* Lite)
-✅ Spatial indexing (KD-tree, R*-tree, Grid Hash)
-✅ Web UI with React + TailwindCSS
-✅ Desktop UI with Tauri 2.0
-✅ Terminal UI with Ratatui
-✅ REST/GraphQL/gRPC API server
-✅ Real-time WebSocket streaming
-✅ Discrete Event Simulation (DES)
-✅ Finite State Machines (FSM)
-✅ Co-simulation support (FMI, HLA)
-✅ High-performance object pooling
-✅ BDI/Cognitive/Reactive agent architectures
-```
+> **Status is reported against the CI-verified build/test baseline, not aspirational
+> percentages.** GaussTwin is in active **pre-1.0 development**. See
+> [`docs/PHASE0_REPORT.md`](docs/PHASE0_REPORT.md) for the honest current state and
+> [`docs/EVALUATION_AND_ROADMAP.md`](docs/EVALUATION_AND_ROADMAP.md) for the plan.
 
-### In Progress
-```rust
-🔄 Advanced AI/ML integration (LLM, MARL)
-🔄 Distributed computing support
-🔄 GPU acceleration (Vulkan, Metal, WebGPU)
-🔄 Performance profiling with NUMA awareness
-```
+**What's verified today (builds + tests green in CI):**
+- Workspace builds from a clean checkout with light default features.
+- `gausstwin-core` — agents, spaces (grid/continuous/graph), scheduler, events,
+  object pooling, profiler: **80 unit tests green**.
+- `gausstwin-api` — REST/GraphQL/gRPC/WebSocket server scaffolding: **11 tests green**.
 
-### Planned Features
-```rust
-📋 Quantum algorithm integration
-📋 Advanced neural agents
-📋 Blockchain integration
-📋 Extended visualization tools
-```
+**Implemented but not yet fully test-verified** (code exists, broad surface; test
+coverage is being established crate-by-crate — see roadmap):
+- DES, FSM/System-Dynamics, co-simulation (FMI/HLA), vector index (HNSW/IVF/PQ),
+  spatial indexing & pathfinding, integration connectors, visualization, agent
+  domain models.
+
+**Known backlog (tracked, not yet working):**
+- `gausstwin-data` test suite is mid-migration (does not compile yet).
+- `gausstwin-cosim` has runtime test failures and a `synchronize()` deadlock.
+- Language bindings (Python/TS) and the speculative modules (`gpu`, `quantum`,
+  `blockchain`, `distributed`) are experimental.
+
+> ⚠️ The previous version of this section listed most features as "✅ complete".
+> Those claims were not backed by a passing build or tests and have been replaced
+> with this CI-grounded status.
 
 ## 💻 Quick Start
 
@@ -149,8 +139,10 @@ model.run(1000);
 ## 🛠 System Requirements
 
 ### Core Requirements
-- Rust 1.74+
-- Cargo and standard Rust toolchain
+- Rust toolchain pinned via `rust-toolchain.toml` (currently 1.94.1; installs
+  automatically with `rustup`)
+- System libs for the default build: `cmake`, `pkg-config`, `libssl-dev`,
+  `libsasl2-dev`, `protobuf-compiler` (see [docs/BUILD.md](docs/BUILD.md))
 - Git for version control
 
 ### Python Bindings
@@ -188,11 +180,17 @@ cargo build -p gausstwin-ai --features torch   # requires libtorch
 
 ## 📚 Documentation
 
-- [API Reference](docs/api/README.md)
-- [Python Guide](docs/python/README.md)
-- [TypeScript Guide](docs/typescript/README.md)
-- [Examples](examples/README.md)
-- [Performance Tips](docs/performance.md)
+- [Build guide](docs/BUILD.md) — prerequisites, features, building bindings/UIs
+- [Architecture](ARCHITECTURE.md) — system design and component overview
+- [Specifications](SPECS.md) — feature specifications
+- [Production-readiness evaluation & roadmap](docs/EVALUATION_AND_ROADMAP.md)
+- [Phase 0 report](docs/PHASE0_REPORT.md) — honest build/test baseline
+- [Contributing](CONTRIBUTING.md) · [Security policy](SECURITY.md) · [Changelog](CHANGELOG.md)
+- API reference: generate locally with `cargo doc --workspace --no-deps --open`
+
+> 📝 Per-language guides (`docs/python/`, `docs/typescript/`) and runnable
+> `examples/` are planned (see roadmap) and intentionally not linked until they
+> exist — to avoid dead links.
 
 ## 🤝 Contributing
 

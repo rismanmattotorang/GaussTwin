@@ -1,0 +1,141 @@
+name: CI
+
+# Phase 1 quality gates. Gates that pass on the current tree are BLOCKING; gates
+# that still have a known backlog (full-workspace tests, clippy -D warnings) run
+# in advisory mode (continue-on-error) so they are visible without making CI red,
+# and are ratcheted to blocking as the backlog is cleared. See docs/PHASE0_REPORT.md
+# and docs/EVALUATION_AND_ROADMAP.md.
+
+on:
+  push:
+    branches: [main, gauss-twin]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: "-D warnings"   # warnings are hard errors in the blocking build/test jobs
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ----- Formatting (BLOCKING) -------------------------------------------------
+  fmt:
+    name: rustfmt
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install toolchain (from rust-toolchain.toml)
+        run: rustup component add rustfmt
+      - run: cargo fmt --all --check
+
+  # ----- Build + blocking tests (BLOCKING) ------------------------------------
+  build-test:
+    name: build & test (green crates)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential cmake pkg-config libssl-dev libsasl2-dev protobuf-compiler
+      - name: Build workspace (default features)
+        run: cargo build --workspace
+      # Crates whose test suites are green and must not regress. Add crates here as
+      # their test debt is cleared (see docs/PHASE0_REPORT.md "Phase 1 backlog").
+      - name: Test (green crates — blocking)
+        run: cargo test -p gausstwin-core -p gausstwin-api
+
+  # ----- Full workspace tests (ADVISORY until backlog cleared) -----------------
+  test-full:
+    name: test (full workspace — advisory)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential cmake pkg-config libssl-dev libsasl2-dev protobuf-compiler
+      # gausstwin-data test code is mid-migration (see PHASE0_REPORT.md); excluded
+      # until it compiles. RUSTFLAGS relaxed here so advisory signal isn't drowned
+      # by warnings.
+      - name: Test full workspace
+        env:
+          RUSTFLAGS: ""
+        run: cargo test --workspace --exclude gausstwin-data --no-fail-fast
+
+  # ----- Clippy (ADVISORY: ratchet to blocking once warnings are cleared) ------
+  clippy:
+    name: clippy (advisory)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential cmake pkg-config libssl-dev libsasl2-dev protobuf-compiler
+      - run: rustup component add clippy
+      # TODO(phase1): drive warnings to zero, then add `-- -D warnings` and remove
+      # continue-on-error so this becomes a blocking gate.
+      - run: cargo clippy --workspace --all-targets
+
+  # ----- Dependency policy: licenses + RUSTSEC advisories (BLOCKING) -----------
+  deny:
+    name: cargo-deny
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          command: check advisories bans licenses sources
+
+  # ----- Docs build (ADVISORY) -------------------------------------------------
+  docs:
+    name: rustdoc
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential cmake pkg-config libssl-dev libsasl2-dev protobuf-compiler
+      - name: Build docs
+        env:
+          RUSTDOCFLAGS: "-D warnings"
+        run: cargo doc --workspace --no-deps --document-private-items
+
+  # ----- Coverage baseline (ADVISORY; ratchet upward) --------------------------
+  coverage:
+    name: coverage
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential cmake pkg-config libssl-dev libsasl2-dev protobuf-compiler
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@cargo-llvm-cov
+      # Measure coverage on the green crates; expand as the test backlog clears.
+      - name: Coverage (green crates)
+        run: cargo llvm-cov -p gausstwin-core -p gausstwin-api --lcov --output-path lcov.info
+      - name: Upload coverage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: lcov
+          path: lcov.info

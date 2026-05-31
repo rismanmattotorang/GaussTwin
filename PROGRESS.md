@@ -1,5 +1,13 @@
 # 📊 GaussTwin Implementation Progress
 
+> ⚠️ **HISTORICAL / ASPIRATIONAL — not the source of truth.**
+> The percentages below were self-reported and are **not** backed by a passing
+> build or test suite (the workspace did not even compile when they were written).
+> For the **CI-verified** status, see **[docs/PHASE0_REPORT.md](docs/PHASE0_REPORT.md)**
+> (build/test baseline) and **[docs/EVALUATION_AND_ROADMAP.md](docs/EVALUATION_AND_ROADMAP.md)**
+> (plan). Going forward, status is driven by CI, not by hand-edited percentages.
+> This file is retained for historical context only.
+
 > Comprehensive implementation status tracking for all GaussTwin components
 
 **Last Updated:** 2026-01-17  
