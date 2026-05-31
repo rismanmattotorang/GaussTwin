@@ -198,7 +198,15 @@ checkout on a pinned toolchain.**
 ### Phase 2 — Harden the core runtime *(3–5 weeks)*
 **Exit gate: core simulation runtime is panic-free on bad input, deterministic under a fixed
 seed, and benchmarked.**
-- [ ] Drive library-code `.unwrap()`/`panic!` to ~0; thread `Result` + `thiserror` everywhere.
+- [~] Drive library-code `.unwrap()`/`panic!` to ~0; thread `Result` + `thiserror` everywhere.
+      **Done (default core):** the non-test, default-surface panic sites are now small and the
+      input-driven ones are fixed — `space::metrics` no longer `panic!`s on mixed `Position`
+      variants (computes from coordinates); the nearest-neighbour sort comparators in
+      `graph`/`grid`/`continuous` are NaN-safe (`partial_cmp(...).unwrap_or(Equal)`); graph
+      `node_weight` lookups skip missing nodes instead of unwrapping. Remaining `unwrap`s in
+      default core are guarded/infallible (e.g. `pop` after `peek`, a constant `TimeStep`).
+      Regression test: `space::metrics::mixed_variants_do_not_panic`. **Pending:** sweep the
+      feature-gated modules and the other crates; consider a scoped `clippy::unwrap_used` lint.
 - [~] Split speculative modules (`gpu`, `quantum`, `blockchain`, `distributed`, `hpc`) out of
       `gausstwin-core`. **Done:** feature-gated behind opt-in features (`experimental` +
       per-module); default core is now minimal (62 tests vs. 80, all green). **Pending:**

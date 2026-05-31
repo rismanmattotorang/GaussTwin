@@ -73,6 +73,16 @@ it reaches `1.0.0`. While pre-1.0, minor versions may include breaking changes.
   `test_run_is_reproducible_with_seed` (**end-to-end**: same seed ⇒ identical
   activation trace through `Model::run`).
 
+### Phase 2 (panic-free core)
+- `space::metrics::{minkowski_distance, direction}` no longer `panic!` on mixed
+  `Position` variants — they compute from coordinates (matching `euclidean_distance`,
+  which already returned gracefully).
+- NaN-safe nearest-neighbour ordering in `space::{graph, grid, continuous}`:
+  `partial_cmp(...).unwrap()` → `unwrap_or(Ordering::Equal)` (NaN coordinates no
+  longer panic the sort).
+- `GraphSpace` `node_weight` lookups skip missing nodes instead of unwrapping.
+- Regression test `space::metrics::mixed_variants_do_not_panic`.
+
 ### Phase 2 (benchmarks)
 - New `gausstwin-core` Criterion benchmark (`core_benchmarks`): seeded scheduler
   step and end-to-end model run (100/1k/10k agents). Replaces the rotted

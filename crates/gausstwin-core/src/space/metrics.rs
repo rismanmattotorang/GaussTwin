@@ -38,32 +38,25 @@ pub fn chebyshev_distance(p1: &Position, p2: &Position) -> f64 {
 
 /// Calculate Minkowski distance between positions
 pub fn minkowski_distance(pos1: &Position, pos2: &Position, p: f64) -> f64 {
-    match (pos1, pos2) {
-        (Position::Grid(p1), Position::Grid(p2)) => {
-            let diff_x = (p1.x - p2.x).abs().powf(p);
-            let diff_y = (p1.y - p2.y).abs().powf(p);
-            let diff_z = (p1.z - p2.z).abs().powf(p);
-            (diff_x + diff_y + diff_z).powf(1.0 / p)
-        }
-        (Position::Continuous(p1), Position::Continuous(p2)) => {
-            let diff_x = (p1.x - p2.x).abs().powf(p);
-            let diff_y = (p1.y - p2.y).abs().powf(p);
-            let diff_z = (p1.z - p2.z).abs().powf(p);
-            (diff_x + diff_y + diff_z).powf(1.0 / p)
-        }
-        _ => panic!("Cannot calculate Minkowski distance between different position types"),
-    }
+    // Both `Position` variants wrap a 3D coordinate vector, so compute from the
+    // coordinates directly. (Previously this panicked when the two positions were of
+    // different variants — an input-driven panic.)
+    let (v1, v2) = (pos1.coords(), pos2.coords());
+    let diff_x = (v1.x - v2.x).abs().powf(p);
+    let diff_y = (v1.y - v2.y).abs().powf(p);
+    let diff_z = (v1.z - v2.z).abs().powf(p);
+    (diff_x + diff_y + diff_z).powf(1.0 / p)
 }
 
 /// Calculate normalized direction vector between positions
 pub fn direction(pos1: &Position, pos2: &Position) -> Position {
-    match (pos1, pos2) {
-        (Position::Grid(p1), Position::Grid(p2)) => {
-            let dir = p2 - p1;
-            Position::Grid(dir)
-        }
-        (Position::Continuous(p1), Position::Continuous(p2)) => {
-            let dir = p2 - p1;
+    // Compute from coordinates so mismatched variants don't panic; the output
+    // variant and normalization follow `pos1`'s kind (grid = raw delta, continuous
+    // = unit vector), matching the original same-variant behavior.
+    let dir = pos2.coords() - pos1.coords();
+    match pos1 {
+        Position::Grid(_) => Position::Grid(dir),
+        Position::Continuous(_) => {
             let length = dir.norm();
             if length > 0.0 {
                 Position::Continuous(dir.normalize())
@@ -71,7 +64,6 @@ pub fn direction(pos1: &Position, pos2: &Position) -> Position {
                 Position::Continuous(dir)
             }
         }
-        _ => panic!("Cannot calculate direction between different position types"),
     }
 }
 
@@ -86,5 +78,25 @@ pub fn direction_vector(from: &Position, to: &Position) -> Option<Position> {
             }
         }
         _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Regression: mixed `Position` variants must not panic (they used to).
+    #[test]
+    fn mixed_variants_do_not_panic() {
+        let grid = Position::Grid(Vector3::new(0.0, 0.0, 0.0));
+        let cont = Position::Continuous(Vector3::new(3.0, 4.0, 0.0));
+
+        let d = minkowski_distance(&grid, &cont, 2.0);
+        assert!(d.is_finite());
+        assert!((d - 5.0).abs() < 1e-9); // 3-4-5 triangle
+
+        // Direction across variants follows pos1's kind and does not panic.
+        let dir = direction(&grid, &cont);
+        assert!(matches!(dir, Position::Grid(_)));
     }
 }
