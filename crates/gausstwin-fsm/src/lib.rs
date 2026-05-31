@@ -17,7 +17,8 @@
 //!
 //! # Examples
 //! ```no_run
-//! use gausstwin_fsm::{FiniteStateMachine, State, Signal, StateMachine};
+//! use std::sync::Arc;
+//! use gausstwin_fsm::{FiniteStateMachine, State, FsmError};
 //!
 //! fn example() -> Result<(), FsmError> {
 //!     let initial = State {
@@ -26,9 +27,13 @@
 //!         entry_actions: vec![],
 //!         exit_actions: vec![],
 //!         data: Arc::new(()),
+//!         parent: None,
+//!         children: vec![],
+//!         is_composite: false,
+//!         initial_substate: None,
 //!     };
-//!     
-//!     let mut fsm = FiniteStateMachine::new(initial, ());
+//!
+//!     let _fsm = FiniteStateMachine::new(initial, ());
 //!     Ok(())
 //! }
 //! ```
