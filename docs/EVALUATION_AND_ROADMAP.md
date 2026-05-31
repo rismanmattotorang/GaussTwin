@@ -223,7 +223,15 @@ seed, and benchmarked.**
       `model::test_run_is_reproducible_with_seed` (**end-to-end**: same seed ⇒ identical
       activation trace through `Model::run`). **Pending:** `proptest` for spaces; richer
       state-trace traces as agent behaviors/space interactions are built out.
-- [ ] Criterion benchmarks wired into CI with regression alerts.
+- [~] Criterion benchmarks wired into CI with regression alerts. **Done:** a clean,
+      compiling core benchmark (`core_benchmarks`: seeded scheduler step + end-to-end model
+      run at 100/1k/10k agents) and a CI `bench` job that compile-checks benches (blocking —
+      prevents rot) and runs+archives them (advisory). The pre-existing benches in other
+      crates had rotted against the evolved APIs (e.g. `gausstwin_spaces::pathfinding`,
+      `Vec2D`, `AgentId::raw`) — core's are replaced/fixed; the rest are tracked backlog.
+      **Pending:** automated regression *alerting* (store baselines across runs via
+      `benchmark-action/github-action-benchmark` + a gh-pages baseline with an alert
+      threshold); revive the other crates' benches.
 
 ### Phase 3 — Consolidate breadth into depth *(4–6 weeks)*
 **Exit gate: each shipped crate has integration tests and is feature-gated; nothing claims

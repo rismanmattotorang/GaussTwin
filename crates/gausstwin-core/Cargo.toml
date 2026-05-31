@@ -8,6 +8,9 @@ license = { workspace = true }
 repository = { workspace = true }
 keywords = ["simulation", "abm", "performance", "concurrency", "modeling"]
 categories = ["simulation", "science", "concurrency"]
+# Only build explicitly-declared benches (the [[bench]] entries below), not every
+# file under benches/. Keeps a single maintained, compiling benchmark target.
+autobenches = false
 
 [features]
 default = ["std", "parallel"]
@@ -26,6 +29,11 @@ gpu = ["dep:wgpu", "dep:bytemuck"]
 distributed = []
 quantum = []
 blockchain = []
+
+[lib]
+# The library has no `#[bench]` functions; disable the default libtest bench
+# harness so `cargo bench` passes criterion's CLI args only to the real benches.
+bench = false
 
 [dependencies]
 # Core dependencies from workspace
@@ -76,5 +84,5 @@ tokio = { workspace = true }
 tokio-test = "0.4"
 
 [[bench]]
-name = "space_benchmarks"
+name = "core_benchmarks"
 harness = false

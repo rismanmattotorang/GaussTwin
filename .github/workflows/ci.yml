@@ -158,3 +158,33 @@ jobs:
         with:
           name: lcov
           path: lcov.info
+
+  # ----- Criterion benchmarks --------------------------------------------------
+  # Compiling the benches is BLOCKING (prevents benchmark rot). Running them is
+  # advisory — timings on shared CI runners are noisy, so they're recorded as an
+  # artifact rather than gated. Automated regression *alerting* (storing baselines
+  # across runs via benchmark-action/github-action-benchmark + a gh-pages branch,
+  # with an alert threshold) is the tracked follow-up.
+  bench:
+    name: benchmarks (core)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential cmake pkg-config libssl-dev libsasl2-dev protobuf-compiler
+      - name: Compile benchmarks (blocking — prevents bench rot)
+        run: cargo bench -p gausstwin-core --no-run
+      - name: Run core benchmarks (advisory)
+        continue-on-error: true
+        run: cargo bench -p gausstwin-core -- --warm-up-time 1 --measurement-time 3 | tee bench-results.txt
+      - name: Upload benchmark results
+        uses: actions/upload-artifact@v4
+        with:
+          name: criterion-core
+          path: |
+            bench-results.txt
+            target/criterion/

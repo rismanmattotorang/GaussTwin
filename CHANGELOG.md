@@ -73,6 +73,15 @@ it reaches `1.0.0`. While pre-1.0, minor versions may include breaking changes.
   `test_run_is_reproducible_with_seed` (**end-to-end**: same seed ⇒ identical
   activation trace through `Model::run`).
 
+### Phase 2 (benchmarks)
+- New `gausstwin-core` Criterion benchmark (`core_benchmarks`): seeded scheduler
+  step and end-to-end model run (100/1k/10k agents). Replaces the rotted
+  `space_benchmarks`/`performance_comparison` (which referenced removed APIs);
+  `autobenches = false` + `[lib] bench = false` keep a single maintained target.
+- CI `bench` job: compile-checks benches (blocking — prevents rot) and runs +
+  archives them (advisory; CI timings are noisy). Automated regression alerting is
+  a tracked follow-up.
+
 ### Phase 2 (started) — keep core minimal
 - Feature-gated the speculative `gausstwin-core` modules (`hpc`, `gpu`,
   `distributed`, `quantum`, `blockchain`) behind opt-in Cargo features. The default
