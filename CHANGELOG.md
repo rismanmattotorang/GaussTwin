@@ -62,8 +62,16 @@ it reaches `1.0.0`. While pre-1.0, minor versions may include breaking changes.
 - `AgentSet::agent_ids()` returns a deterministic (sorted) order instead of
   `HashMap` key order; `AgentId` is now `Ord`.
 - Added a scheduler seed-stability test (same seed ⇒ identical activation order).
-  Note: end-to-end state-trace determinism is still blocked on the agent-execution
-  loop, which `StandardModel::step` does not yet implement.
+
+### Phase 2 (core agent-execution loop)
+- `StandardModel::step` now actually runs agents: it executes each agent's `step`
+  in the scheduler-dictated order (previously a stub that only advanced time).
+  `initialize` now also initializes the agents.
+- Fixed `Model::run`, whose loop guard required the `Running` state and so never
+  executed a step starting from `Initialized`.
+- Added `test_agent_execution_loop` (agents step once per tick) and
+  `test_run_is_reproducible_with_seed` (**end-to-end**: same seed ⇒ identical
+  activation trace through `Model::run`).
 
 ### Phase 2 (started) — keep core minimal
 - Feature-gated the speculative `gausstwin-core` modules (`hpc`, `gpu`,

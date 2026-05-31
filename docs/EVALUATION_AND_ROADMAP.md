@@ -208,18 +208,21 @@ seed, and benchmarked.**
       core). `vec` AVX2 intrinsics now carry `#[target_feature(enable="avx2")]` + SAFETY docs;
       `spaces` memory-pool `unsafe` made sound (no leak, `Drop` reclaims) + documented.
       **Pending:** `miri`/fuzz, and the nightly `std::simd` path in `spaces`.
+- [x] **Core agent-execution loop.** `StandardModel::step` was a stub (advanced time but
+      never ran agents). It now executes each agent's `step` in the scheduler-dictated order,
+      and `initialize` initializes agents. Also fixed `Model::run`, whose loop guard required
+      `Running` and so never executed a step from the `Initialized` state. Covered by
+      `test_agent_execution_loop` (10 agents × 5 ticks each step once per tick).
 - [~] Property tests (`proptest`) for spaces/scheduler; **determinism/seed-stability test**
       (same seed ⇒ identical trace) — prerequisite for the paper's reproducibility claim.
-      **Done:** fixed two real determinism bugs — `StandardModel` ignored
-      `ModelConfig::seed` (the random scheduler was seeded from `rand::random()`), and
-      `AgentSet::agent_ids()` returned `HashMap` keys in nondeterministic order (now
-      sorted; `AgentId` is `Ord`). Added a scheduler seed-stability test (same seed ⇒
-      identical multi-step activation order). **Blocker for full state-trace
-      determinism:** `StandardModel::step` is a stub — it advances time but never
-      executes agent behavior (fetches the agent into an unused binding). Implementing
-      the agent-execution loop is the prerequisite for an end-to-end trace-determinism
-      test, and is the core ABM-runtime work this phase must tackle next.
-      **Pending:** `proptest` for spaces; end-to-end trace determinism once the loop exists.
+      **Done:** fixed two determinism bugs — `StandardModel` ignored `ModelConfig::seed` (the
+      random scheduler was seeded from `rand::random()`), and `AgentSet::agent_ids()` returned
+      `HashMap` keys in nondeterministic order (now sorted; `AgentId` is `Ord`). With the
+      agent-execution loop in place there are now **two** determinism tests:
+      `scheduler::test_random_scheduler_seed_determinism` (activation order) and
+      `model::test_run_is_reproducible_with_seed` (**end-to-end**: same seed ⇒ identical
+      activation trace through `Model::run`). **Pending:** `proptest` for spaces; richer
+      state-trace traces as agent behaviors/space interactions are built out.
 - [ ] Criterion benchmarks wired into CI with regression alerts.
 
 ### Phase 3 — Consolidate breadth into depth *(4–6 weeks)*

@@ -370,6 +370,9 @@ impl<S: crate::agent::AgentState + Default> Model<S> for StandardModel<S> {
             // Set initial time
             self.current_time = self.config.start_time;
 
+            // Initialize the agents themselves (once, before the run begins).
+            self.agents.initialize_all(self.current_time)?;
+
             // Initialize scheduler with current agents
             let agent_ids = self.agents.agent_ids();
             self.scheduler.initialize(&agent_ids)?;
@@ -419,23 +422,28 @@ impl<S: crate::agent::AgentState + Default> Model<S> for StandardModel<S> {
             // Reset scheduler for this step
             self.scheduler.reset_step()?;
 
-            // Execute agents in batches
-            while self.scheduler.has_next() {
-                let batch = self.scheduler.next_batch(self.current_time)?;
+            // Hoist these out of the `self.agents` borrow below. The crate's
+            // `Duration::as_secs` already returns an `f64`, so no truncation.
+            let current_time = self.current_time;
+            let time_step = self.config.time_step.duration().as_secs();
 
-                // Process each agent in the batch
+            // Execute agents in the order the scheduler dictates — this is where
+            // run-to-run reproducibility comes from (see the scheduler
+            // seed-stability test).
+            while self.scheduler.has_next() {
+                let batch = self.scheduler.next_batch(current_time)?;
+
                 for agent_id in batch {
-                    if let Some(_agent) = self.agents.get_agent_mut(&agent_id) {
-                        let _context: AgentContext<S> = AgentContext {
-                            agent_id: agent_id,
-                            current_time: self.current_time,
-                            time_step: self.config.time_step.duration().as_secs(),
-                            shared_state: Default::default(),
+                    if let Some(agent) = self.agents.get_agent_mut(&agent_id) {
+                        let mut context: AgentContext<S> = AgentContext {
+                            agent_id,
+                            current_time,
+                            time_step,
+                            shared_state: None,
                             messages: vec![],
                         };
-
-                        // This would need to be properly implemented with async context
-                        // For now, we just count the step
+                        // Run one step of the agent's behaviour.
+                        agent.step(&mut context)?;
                     }
                 }
             }
@@ -472,7 +480,12 @@ impl<S: crate::agent::AgentState + Default> Model<S> for StandardModel<S> {
         };
 
         async move {
-            while self.current_time < end_time && self.state() == ModelState::Running {
+            // Allow starting from `Initialized` (a freshly-initialized model isn't
+            // `Running` yet — `step` performs that transition). Without this the loop
+            // would exit immediately and never execute a step.
+            while self.current_time < end_time
+                && matches!(self.state(), ModelState::Initialized | ModelState::Running)
+            {
                 let should_continue = self.step().await?;
                 if !should_continue {
                     break;
@@ -692,5 +705,179 @@ mod tests {
         let metrics = model.metrics();
         assert_eq!(metrics.agent_count, 0);
         assert_eq!(metrics.steps_executed, 0);
+    }
+
+    // --- End-to-end agent-execution loop ------------------------------------
+
+    use crate::agent::{Agent, AgentContext, AgentId, AgentMessage};
+
+    /// Agent state that just counts how many times it has been stepped.
+    #[derive(Debug, Clone, Default)]
+    struct CountingState {
+        count: u64,
+    }
+
+    impl crate::agent::AgentState for CountingState {
+        fn position(&self) -> Option<crate::space::VecN> {
+            None
+        }
+        fn set_position(&mut self, _position: crate::space::VecN) {}
+        fn properties(&self) -> std::collections::HashMap<String, serde_json::Value> {
+            std::collections::HashMap::new()
+        }
+        fn set_property(&mut self, _key: String, _value: serde_json::Value) {}
+    }
+
+    #[derive(Debug)]
+    struct CountingAgent {
+        id: AgentId,
+        state: CountingState,
+    }
+
+    impl Agent for CountingAgent {
+        type State = CountingState;
+        fn id(&self) -> AgentId {
+            self.id
+        }
+        fn state(&self) -> &CountingState {
+            &self.state
+        }
+        fn state_mut(&mut self) -> &mut CountingState {
+            &mut self.state
+        }
+        fn initialize(&mut self, _ctx: &AgentContext<CountingState>) -> Result<()> {
+            Ok(())
+        }
+        fn step(&mut self, _ctx: &mut AgentContext<CountingState>) -> Result<()> {
+            self.state.count += 1;
+            Ok(())
+        }
+        fn handle_message(
+            &mut self,
+            _message: AgentMessage,
+            _ctx: &AgentContext<CountingState>,
+        ) -> Result<()> {
+            Ok(())
+        }
+        fn finalize(&mut self, _ctx: &AgentContext<CountingState>) -> Result<()> {
+            Ok(())
+        }
+        fn as_any(&self) -> &dyn std::any::Any {
+            self
+        }
+        fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+            self
+        }
+    }
+
+    /// The core loop must actually execute agents: with a fixed seed, 10 agents
+    /// over 5 ticks (time 0..5, step 1.0) each step exactly once per tick.
+    #[tokio::test]
+    async fn test_agent_execution_loop() {
+        let config = ModelConfig::new("exec".to_string())
+            .with_time_range(SimTime::zero(), SimTime::new(5.0))
+            .with_seed(42);
+        let mut model: StandardModel<CountingState> = StandardModel::new(config).unwrap();
+
+        let mut ids = Vec::new();
+        for i in 0..10u128 {
+            let id = model
+                .add_agent(Box::new(CountingAgent {
+                    id: AgentId::from_raw(i),
+                    state: CountingState::default(),
+                }))
+                .await
+                .unwrap();
+            ids.push(id);
+        }
+
+        model.initialize().await.unwrap();
+        model.run(None).await.unwrap();
+
+        assert_eq!(model.state(), ModelState::Completed);
+        // Every agent stepped on every one of the 5 ticks.
+        for id in &ids {
+            let agent = model.agents.get_agent(id).expect("agent present");
+            assert_eq!(agent.state().count, 5);
+        }
+    }
+
+    /// Agent that appends its label to a shared log each time it is stepped, so a
+    /// test can observe the exact activation order across a whole run.
+    #[derive(Debug)]
+    struct RecorderAgent {
+        id: AgentId,
+        label: u128,
+        log: std::sync::Arc<std::sync::Mutex<Vec<u128>>>,
+        state: CountingState,
+    }
+
+    impl Agent for RecorderAgent {
+        type State = CountingState;
+        fn id(&self) -> AgentId {
+            self.id
+        }
+        fn state(&self) -> &CountingState {
+            &self.state
+        }
+        fn state_mut(&mut self) -> &mut CountingState {
+            &mut self.state
+        }
+        fn initialize(&mut self, _ctx: &AgentContext<CountingState>) -> Result<()> {
+            Ok(())
+        }
+        fn step(&mut self, _ctx: &mut AgentContext<CountingState>) -> Result<()> {
+            self.log.lock().unwrap().push(self.label);
+            Ok(())
+        }
+        fn handle_message(
+            &mut self,
+            _message: AgentMessage,
+            _ctx: &AgentContext<CountingState>,
+        ) -> Result<()> {
+            Ok(())
+        }
+        fn finalize(&mut self, _ctx: &AgentContext<CountingState>) -> Result<()> {
+            Ok(())
+        }
+        fn as_any(&self) -> &dyn std::any::Any {
+            self
+        }
+        fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+            self
+        }
+    }
+
+    /// End-to-end reproducibility: running the same scenario twice with the same
+    /// seed produces an identical agent-activation trace through `Model::run`.
+    #[tokio::test]
+    async fn test_run_is_reproducible_with_seed() {
+        async fn run_trace(seed: u64) -> Vec<u128> {
+            let log = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+            let config = ModelConfig::new("determinism".to_string())
+                .with_time_range(SimTime::zero(), SimTime::new(3.0))
+                .with_seed(seed);
+            let mut model: StandardModel<CountingState> = StandardModel::new(config).unwrap();
+            for i in 0..8u128 {
+                model
+                    .add_agent(Box::new(RecorderAgent {
+                        id: AgentId::from_raw(i),
+                        label: i,
+                        log: log.clone(),
+                        state: CountingState::default(),
+                    }))
+                    .await
+                    .unwrap();
+            }
+            model.initialize().await.unwrap();
+            model.run(None).await.unwrap();
+            let trace = log.lock().unwrap().clone();
+            trace
+        }
+
+        // Same seed ⇒ identical activation trace (the reproducibility guarantee).
+        assert_eq!(run_trace(42).await, run_trace(42).await);
+        // 3 ticks × 8 agents = 24 activations.
+        assert_eq!(run_trace(42).await.len(), 24);
     }
 }
