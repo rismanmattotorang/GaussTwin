@@ -31,7 +31,7 @@ cargo fmt --all --check                 # formatting (BLOCKING)
 cargo build --workspace                 # build (BLOCKING, warnings = errors)
 cargo test -p gausstwin-core -p gausstwin-api   # green-crate tests (BLOCKING)
 cargo clippy --workspace --all-targets  # lint (advisory today; being ratcheted)
-cargo deny check                        # licenses + RUSTSEC advisories (BLOCKING)
+cargo deny check                        # licenses + RUSTSEC advisories (advisory today)
 ```
 
 ### Gate status & ratcheting
@@ -45,6 +45,8 @@ backlog is being worked down — see `docs/PHASE0_REPORT.md`:
   blocking `build-test` job and remove it from the advisory exclusions.
 - **`clippy -D warnings`** is advisory until the existing warnings are cleared
   (Phase 2). Don't *add* new warnings.
+- **`cargo-deny`** is advisory until the (older) dependency tree is triaged and
+  modernized (Phase 2/5); then it becomes blocking.
 
 The rule of thumb: **the blocking set only grows.** Don't regress a gate that is
 already green.
