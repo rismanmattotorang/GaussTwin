@@ -523,6 +523,7 @@ impl DiscreteEventSimulator {
     pub async fn run(&self) -> Result<(), SimulationError> {
         let start_time = std::time::Instant::now();
         let mut events_processed = 0;
+        let mut last_checkpoint = start_time;
 
         while let Some(event) = self.event_queue.peek_next_event() {
             if event.time > self.config.max_time {
@@ -590,12 +591,21 @@ impl DiscreteEventSimulator {
             // Update simulation time
             *self.current_time.write() = event.time;
 
-            // Checkpoint if needed
+            // Checkpoint on the wall-clock interval, measured since the last
+            // checkpoint (not since start) so we don't checkpoint on every
+            // iteration once the first interval has elapsed.
             if let Some(interval) = self.config.checkpoint_interval {
-                if start_time.elapsed() >= interval {
+                if last_checkpoint.elapsed() >= interval {
                     self.create_checkpoint()?;
+                    last_checkpoint = std::time::Instant::now();
                 }
             }
+        }
+
+        // When checkpointing is enabled, always leave at least one checkpoint as a
+        // resume point: short runs may finish before the first interval elapses.
+        if self.config.checkpoint_interval.is_some() && events_processed > 0 {
+            self.create_checkpoint()?;
         }
 
         Ok(())
