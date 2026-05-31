@@ -315,25 +315,24 @@ impl<T> HighPerformanceMemoryPool<T> {
     }
 
     pub fn allocate(&self) -> Option<T> {
-        // Try free list first
+        let size = std::mem::size_of::<T>();
+        // Try the free list first (a recycled object).
         if let Some(ptr) = self.free_list.pop() {
             self.stats.record_cache_hit();
-            unsafe {
-                return Some(ptr.read());
-            }
+            self.stats.record_allocation(size);
+            // SAFETY: `ptr` was produced by `Box::into_raw` in `deallocate`, and
+            // `SegQueue` yields each pushed pointer exactly once, so we hold unique
+            // ownership of a live `Box<T>` allocation. Reconstructing the box both
+            // moves the value out and frees the backing allocation (no leak).
+            return Some(*unsafe { Box::from_raw(ptr) });
         }
 
+        // Miss: the pool has nothing to recycle. We still count this as an
+        // allocation request so the alloc/dealloc accounting balances; the caller
+        // supplies the fresh value (e.g. via `unwrap_or_default`).
         self.stats.record_cache_miss();
-
-        ALLOCATOR.with(|alloc_cell| {
-            // SAFETY: casting between generic types for demonstration; replace with type-safe allocator as needed
-            let mut _alloc = alloc_cell.borrow_mut();
-            if let Some(chunk) = None::<Arc<Chunk<T>>> {
-                None
-            } else {
-                None
-            }
-        })
+        self.stats.record_allocation(size);
+        None
     }
 
     pub fn deallocate(&self, value: T) {
@@ -344,6 +343,18 @@ impl<T> HighPerformanceMemoryPool<T> {
 
     pub fn get_stats(&self) -> Arc<PoolStats> {
         Arc::clone(&self.stats)
+    }
+}
+
+impl<T> Drop for HighPerformanceMemoryPool<T> {
+    fn drop(&mut self) {
+        // Reclaim any boxed values still parked in the free list so the pool does
+        // not leak the allocations created by `deallocate`.
+        while let Some(ptr) = self.free_list.pop() {
+            // SAFETY: every pointer in `free_list` came from `Box::into_raw` in
+            // `deallocate` and is popped at most once.
+            drop(unsafe { Box::from_raw(ptr) });
+        }
     }
 }
 
@@ -362,12 +373,22 @@ impl<K: Eq + std::hash::Hash, V: Clone> SpatialCache<K, V> {
     }
 
     pub fn get(&self, key: &K) -> Option<V> {
-        if let Some(entry) = self.data.get(key) {
-            let (value, timestamp) = entry.value();
-            if timestamp.elapsed() < self.ttl {
-                return Some(value.clone());
+        // Read the entry and decide while holding the read guard, then release it
+        // BEFORE mutating the map. Calling `remove` while the `Ref` returned by
+        // `get` is still alive deadlocks DashMap (both touch the same shard lock).
+        let expired = {
+            if let Some(entry) = self.data.get(key) {
+                let (value, timestamp) = entry.value();
+                if timestamp.elapsed() < self.ttl {
+                    return Some(value.clone());
+                }
+                true
+            } else {
+                false
             }
-            // Entry expired, remove it
+        };
+        if expired {
+            // Entry expired — evict it now that the read guard is released.
             self.data.remove(key);
         }
         None
@@ -504,10 +525,6 @@ mod tests {
         assert_eq!(stats.current_memory.load(Ordering::Relaxed), 0);
     }
 
-    // TODO(phase1-test-debt): this test hangs (SpatialCache operation blocks
-    // indefinitely — likely a lock/TTL-eviction deadlock). Ignored to keep the
-    // suite runnable; tracked as a runtime bug alongside the cosim deadlock.
-    #[ignore = "SpatialCache hangs — tracked runtime bug, see Phase 1 test hardening"]
     #[test]
     fn test_spatial_cache() {
         let cache = SpatialCache::new(Duration::from_secs(1));

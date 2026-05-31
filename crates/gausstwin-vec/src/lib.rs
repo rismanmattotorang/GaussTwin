@@ -239,7 +239,18 @@ impl VectorStore {
 }
 
 // SIMD implementations
+//
+// SAFETY (applies to both AVX2 helpers below):
+// - They use AVX2 intrinsics, so callers MUST only invoke them after confirming
+//   AVX2 is available (`is_x86_feature_detected!("avx2")`); the `#[target_feature]`
+//   attribute encodes that requirement. The public `l2_distance`/`dot_product`
+//   wrappers perform that check.
+// - Each 8-wide `_mm256_loadu_ps(&x[i])` reads `x[i..i+8]`. The loop bound
+//   `n_simd = n - (n % 8)` guarantees `i + 8 <= n`, so every load is in bounds for a
+//   slice of length `n`.
+// - They assume `a.len() == b.len()`; the public wrappers assert this before calling.
 #[cfg(target_arch = "x86_64")]
+#[target_feature(enable = "avx2")]
 unsafe fn compute_l2_distance_simd(a: &[f32], b: &[f32]) -> f32 {
     let mut sum = _mm256_setzero_ps();
     let n = a.len();
@@ -277,7 +288,9 @@ fn compute_l2_distance(a: &[f32], b: &[f32]) -> f32 {
         .sqrt()
 }
 
+// SAFETY: see the note above `compute_l2_distance_simd`.
 #[cfg(target_arch = "x86_64")]
+#[target_feature(enable = "avx2")]
 unsafe fn compute_dot_product_simd(a: &[f32], b: &[f32]) -> f32 {
     let mut sum = _mm256_setzero_ps();
     let n = a.len();

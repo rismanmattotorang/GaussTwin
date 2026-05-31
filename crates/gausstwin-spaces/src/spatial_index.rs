@@ -27,7 +27,9 @@ pub enum SpatialIndex {
     KdTree(RwLock<KdTree<f64, usize, [f64; 3]>>),
     GridHash {
         cell_size: f64,
-        cells: DashMap<(i64, i64, i64), SmallVec<[usize; 8]>>,
+        // Store the full point (position + id), not just the id: query_radius needs
+        // the real position to compute exact distances.
+        cells: DashMap<(i64, i64, i64), SmallVec<[SpatialPoint; 8]>>,
     },
     RTree(RwLock<RTree<SpatialPoint>>),
     Octree(RwLock<Octree>),
@@ -68,18 +70,24 @@ impl OctreeNode {
     }
 
     fn insert(&mut self, point: SpatialPoint, max_points: usize, min_size: f64) {
-        // Compute child index (requires only immutable access) before mutable borrow.
-        let child_idx_opt = {
-            if self.children.is_some() {
-                let p: Point = point.position.into();
-                Some(self.get_child_index(&p))
-            } else {
-                None
+        // Internal node: descend into the child octant containing the point.
+        if self.children.is_some() {
+            let p: Point = point.position.into();
+            let child_idx = self.get_child_index(&p);
+            if let Some(children) = &mut self.children {
+                children[child_idx].insert(point, max_points, min_size);
             }
-        };
+            return;
+        }
 
-        if let (Some(children), Some(child_idx)) = (&mut self.children, child_idx_opt) {
-            children[child_idx].insert(point, max_points, min_size);
+        // Leaf node: store the point here.
+        self.points.push(point);
+
+        // Split once we exceed capacity, provided the resulting children would not
+        // be smaller than the minimum cell size. `split` drains `self.points` into
+        // the new children, so the point just inserted is redistributed too.
+        if self.points.len() > max_points && self.half_size * 0.5 >= min_size {
+            self.split();
         }
     }
 
@@ -240,7 +248,13 @@ impl SpatialIndex {
                 let cell_x = (point.x / cell_size).floor() as i64;
                 let cell_y = (point.y / cell_size).floor() as i64;
                 let cell_z = (point.z / cell_size).floor() as i64;
-                cells.entry((cell_x, cell_y, cell_z)).or_default().push(id);
+                cells
+                    .entry((cell_x, cell_y, cell_z))
+                    .or_default()
+                    .push(SpatialPoint {
+                        position: [point.x, point.y, point.z],
+                        id,
+                    });
             }
             Self::RTree(tree) => {
                 let mut tree = tree.write();
@@ -275,7 +289,11 @@ impl SpatialIndex {
                     .collect::<Vec<_>>()
             }
             Self::GridHash { cell_size, cells } => {
-                let cell_radius = (radius / cell_size).ceil() as i64;
+                // Scan every cell that could overlap the query sphere. Use one extra
+                // ring of cells (`+ 1`) because `center` is generally not aligned to
+                // a cell boundary, so the reachable cell-index span can exceed
+                // ceil(radius / cell_size) by one.
+                let cell_radius = (radius / cell_size).ceil() as i64 + 1;
                 let center_x = (center.x / cell_size).floor() as i64;
                 let center_y = (center.y / cell_size).floor() as i64;
                 let center_z = (center.z / cell_size).floor() as i64;
@@ -283,70 +301,21 @@ impl SpatialIndex {
                 let radius_sq = radius * radius;
                 let mut result = Vec::new();
 
-                // Use SIMD for distance calculations
-                let center_x_simd = f64x4::splat(center.x);
-                let center_y_simd = f64x4::splat(center.y);
-                let center_z_simd = f64x4::splat(center.z);
-                let radius_sq_simd = f64x4::splat(radius_sq);
-
                 for dx in -cell_radius..=cell_radius {
                     for dy in -cell_radius..=cell_radius {
                         for dz in -cell_radius..=cell_radius {
                             if let Some(cell) =
                                 cells.get(&(center_x + dx, center_y + dy, center_z + dz))
                             {
-                                let points = cell.value();
-                                let chunks = points.chunks(4);
-
-                                for chunk in chunks {
-                                    let mut positions = [[0.0; 4]; 3];
-                                    for (i, &id) in chunk.iter().enumerate() {
-                                        let point = Point::new(
-                                            (center_x + dx) as f64 * cell_size,
-                                            (center_y + dy) as f64 * cell_size,
-                                            (center_z + dz) as f64 * cell_size,
-                                        );
-                                        positions[0][i] = point.x;
-                                        positions[1][i] = point.y;
-                                        positions[2][i] = point.z;
-                                    }
-
-                                    let x_simd = f64x4::from_array(positions[0]);
-                                    let y_simd = f64x4::from_array(positions[1]);
-                                    let z_simd = f64x4::from_array(positions[2]);
-
-                                    let dx_simd = x_simd - center_x_simd;
-                                    let dy_simd = y_simd - center_y_simd;
-                                    let dz_simd = z_simd - center_z_simd;
-
-                                    let dist_sq_simd =
-                                        dx_simd * dx_simd + dy_simd * dy_simd + dz_simd * dz_simd;
-                                    let mask = dist_sq_simd.simd_le(radius_sq_simd);
-
-                                    for (i, &id) in chunk.iter().enumerate() {
-                                        if mask.test(i) {
-                                            result.push(id);
-                                        }
-                                    }
-                                }
-
-                                // Handle remaining points
-                                let remainder = points.len() % 4;
-                                if remainder > 0 {
-                                    let start = points.len() - remainder;
-                                    for &id in &points[start..] {
-                                        let point = Point::new(
-                                            (center_x + dx) as f64 * cell_size,
-                                            (center_y + dy) as f64 * cell_size,
-                                            (center_z + dz) as f64 * cell_size,
-                                        );
-                                        let dx = point.x - center.x;
-                                        let dy = point.y - center.y;
-                                        let dz = point.z - center.z;
-                                        let dist_sq = dx * dx + dy * dy + dz * dz;
-                                        if dist_sq <= radius_sq {
-                                            result.push(id);
-                                        }
+                                // Test each point's *actual* position against the
+                                // radius (the previous code used the cell corner as a
+                                // proxy, which misclassified points near the boundary).
+                                for sp in cell.value() {
+                                    let ddx = sp.position[0] - center.x;
+                                    let ddy = sp.position[1] - center.y;
+                                    let ddz = sp.position[2] - center.z;
+                                    if ddx * ddx + ddy * ddy + ddz * ddz <= radius_sq {
+                                        result.push(sp.id);
                                     }
                                 }
                             }
@@ -390,7 +359,13 @@ impl SpatialIndex {
                     let cell_x = (point.x / cell_size).floor() as i64;
                     let cell_y = (point.y / cell_size).floor() as i64;
                     let cell_z = (point.z / cell_size).floor() as i64;
-                    cells.entry((cell_x, cell_y, cell_z)).or_default().push(id);
+                    cells
+                        .entry((cell_x, cell_y, cell_z))
+                        .or_default()
+                        .push(SpatialPoint {
+                            position: [point.x, point.y, point.z],
+                            id,
+                        });
                 });
             }
             Self::RTree(tree_lock) => {
@@ -451,7 +426,7 @@ fn squared_distance_to_box(point: &Point, bounds: &AABB<[f64; 3]>) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rand::Rng;
+    use rand::{Rng, SeedableRng};
 
     #[test]
     fn test_kdtree() {
@@ -478,7 +453,10 @@ mod tests {
     }
 
     fn test_index_implementation(index: &SpatialIndex) {
-        let mut rng = rand::thread_rng();
+        // Seeded RNG so the index tests are deterministic/reproducible (Phase 2):
+        // a fixed seed gives the same point set every run, so a failure is a real
+        // bug rather than boundary-condition flakiness from random data.
+        let mut rng = rand::rngs::StdRng::seed_from_u64(0xC0FFEE);
         let mut points = Vec::new();
 
         // Generate random points
