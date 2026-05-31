@@ -422,7 +422,10 @@ impl<S: AgentState + Default + Clone> AgentArena<S> {
         
         if self.storage[slot].is_some() {
             self.storage[slot] = None;
-            self.free_slots.push_back(slot);
+            // Reuse the most-recently-freed slot first (LIFO/stack discipline).
+            // This keeps freshly-freed slots hot in cache and gives deterministic
+            // immediate reuse after a deallocation.
+            self.free_slots.push_front(slot);
             self.active_count -= 1;
         }
         

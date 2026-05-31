@@ -20,7 +20,10 @@ use parking_lot::{Mutex, RwLock};
 use serde::{Deserialize, Serialize};
 
 /// Global profiler instance
-static PROFILER_ENABLED: AtomicBool = AtomicBool::new(false);
+/// Global master switch for profiling, toggled explicitly via
+/// `PerformanceProfiler::set_enabled`. Defaults to enabled; per-instance
+/// recording is additionally gated by each profiler's `config.enabled`.
+static PROFILER_ENABLED: AtomicBool = AtomicBool::new(true);
 
 /// Profiler configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -218,8 +221,11 @@ impl PerformanceProfiler {
     
     /// Create a new profiler with custom configuration
     pub fn with_config(config: ProfilerConfig) -> Self {
-        PROFILER_ENABLED.store(config.enabled, Ordering::Relaxed);
-        
+        // Note: construction does NOT mutate the global `PROFILER_ENABLED` master
+        // switch. Whether a given profiler records is governed by its own
+        // `config.enabled` (see `is_enabled`); the global is only changed via the
+        // explicit `set_enabled`. This keeps independent profiler instances (and
+        // concurrent tests) from interfering through shared global state.
         Self {
             config,
             timers: RwLock::new(HashMap::new()),

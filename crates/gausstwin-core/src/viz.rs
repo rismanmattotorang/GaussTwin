@@ -373,9 +373,9 @@ mod tests {
         let agent_id = AgentId::from_raw(1);
         
         let object = SceneObject {
-            position: VecN::new_3d(1.0, 2.0, 3.0),
-            rotation: VecN::new_3d(0.0, 0.0, 0.0),
-            scale: VecN::new_3d(1.0, 1.0, 1.0),
+            position: VecN::new(1.0, 2.0, 3.0),
+            rotation: VecN::new(0.0, 0.0, 0.0),
+            scale: VecN::new(1.0, 1.0, 1.0),
             mesh_id: "cube".to_string(),
             material_id: "default".to_string(),
             visible: true,

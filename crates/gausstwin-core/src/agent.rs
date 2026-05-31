@@ -33,6 +33,14 @@ impl AgentId {
     pub fn from_bytes(bytes: [u8; 16]) -> Self {
         Self(Uuid::from_bytes(bytes))
     }
+
+    /// Create a deterministic agent ID from a numeric seed.
+    ///
+    /// Useful for reproducible scenarios and tests where stable, comparable IDs
+    /// are required. The same `raw` value always maps to the same `AgentId`.
+    pub fn from_raw(raw: u128) -> Self {
+        Self(Uuid::from_u128(raw))
+    }
     
     /// Get the raw bytes of the agent ID
     pub fn as_bytes(&self) -> [u8; 16] {
@@ -428,7 +436,7 @@ mod tests {
         
         assert!(state.position().is_none());
         
-        state.set_position(VecN::new_2d(1.0, 2.0));
+        state.set_position(VecN::new(1.0, 2.0, 0.0));
         assert!(state.position().is_some());
         
         state.set_property("health".to_string(), serde_json::json!(100));

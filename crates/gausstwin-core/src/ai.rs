@@ -111,9 +111,15 @@ impl NeuralNetwork {
         
         for i in 0..layer_sizes.len() {
             layers.push(Layer {
+                // `forward` applies a layer's activation when producing that layer
+                // from the previous one, so activations correspond to the
+                // non-input (weight) layers: layer `i` (i >= 1) uses
+                // `activations[i - 1]`. The input layer (i == 0) has no activation.
                 size: layer_sizes[i],
-                activation: if i < activations.len() {
-                    activations[i].clone()
+                activation: if i == 0 {
+                    ActivationFunction::Linear
+                } else if i - 1 < activations.len() {
+                    activations[i - 1].clone()
                 } else {
                     ActivationFunction::Linear
                 },
@@ -461,7 +467,16 @@ impl FederatedLearning {
         
         match self.aggregation_method {
             AggregationMethod::FederatedAveraging => {
-                let mut aggregated_weights = vec![0.0; self.global_model.weights.len()];
+                // Size the aggregate from the incoming updates' dimensionality.
+                // The global model may not have been initialized with weights yet
+                // (e.g. on the first round), so deriving the length from it would
+                // produce an empty result.
+                let weight_len = updates
+                    .values()
+                    .map(|p| p.weights.len())
+                    .max()
+                    .unwrap_or(0);
+                let mut aggregated_weights = vec![0.0; weight_len];
                 let num_participants = updates.len() as f64;
                 
                 for params in updates.values() {

@@ -315,9 +315,11 @@ impl ThreadPool {
             });
             
             if let Some(task) = task {
-                active_tasks.fetch_add(1, Ordering::Relaxed);
+                // Note: `active_tasks` is incremented at submit time (it counts
+                // outstanding pending+in-flight tasks); the worker only decrements
+                // it once the task has finished executing, below.
                 let start = Instant::now();
-                
+
                 // Execute the task
                 (task.work)();
                 
@@ -365,16 +367,23 @@ impl ThreadPool {
     {
         let task_id = self.next_task_id.fetch_add(1, Ordering::Relaxed);
         let task = Task::new(task_id, priority, work);
-        
+
+        // Count the task as outstanding *before* it can be picked up by a worker.
+        // `wait_idle()` waits on this counter, so it must include pending (queued
+        // but not yet started) tasks, not only in-flight ones.
+        self.active_tasks.fetch_add(1, Ordering::SeqCst);
         self.task_sender
             .send(task)
-            .map_err(|_| GaussTwinError::ThreadPoolError("Failed to submit task".to_string()))?;
-        
+            .map_err(|_| {
+                self.active_tasks.fetch_sub(1, Ordering::SeqCst);
+                GaussTwinError::ThreadPoolError("Failed to submit task".to_string())
+            })?;
+
         self.stats.write().tasks_submitted += 1;
-        
+
         Ok(task_id)
     }
-    
+
     /// Submit a task with a deadline
     pub fn submit_with_deadline<F>(
         &self,
@@ -387,13 +396,17 @@ impl ThreadPool {
     {
         let task_id = self.next_task_id.fetch_add(1, Ordering::Relaxed);
         let task = Task::new(task_id, priority, work).with_deadline(deadline);
-        
+
+        self.active_tasks.fetch_add(1, Ordering::SeqCst);
         self.task_sender
             .send(task)
-            .map_err(|_| GaussTwinError::ThreadPoolError("Failed to submit task".to_string()))?;
-        
+            .map_err(|_| {
+                self.active_tasks.fetch_sub(1, Ordering::SeqCst);
+                GaussTwinError::ThreadPoolError("Failed to submit task".to_string())
+            })?;
+
         self.stats.write().tasks_submitted += 1;
-        
+
         Ok(task_id)
     }
     

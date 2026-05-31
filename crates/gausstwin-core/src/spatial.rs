@@ -476,7 +476,7 @@ mod tests {
     fn test_adaptive_hash_grid() {
         let mut grid = AdaptiveHashGrid::new(1.0);
         let agent_id = AgentId::new();
-        let position = VecN::Vec2(nalgebra::Vector2::new(5.0, 3.0));
+        let position = VecN::new(5.0, 3.0, 0.0);
         
         assert!(grid.insert(agent_id, &position).is_ok());
         assert_eq!(grid.agent_count(), 1);
@@ -492,7 +492,7 @@ mod tests {
     fn test_r_star_tree() {
         let mut tree = RStarTree::new(4);
         let agent_id = AgentId::new();
-        let position = VecN::Vec2(nalgebra::Vector2::new(1.0, 2.0));
+        let position = VecN::new(1.0, 2.0, 0.0);
         
         assert!(tree.insert(agent_id, position.clone()).is_ok());
         
@@ -507,23 +507,26 @@ mod tests {
         assert!(grid.set(5, 5, 5, 42).is_ok());
         assert_eq!(grid.get(5, 5, 5), Some(&42));
         
-        let position = VecN::Vec3(nalgebra::Vector3::new(5.5, 5.5, 5.5));
+        let position = VecN::new(5.5, 5.5, 5.5);
         assert_eq!(grid.position_to_coord(&position), Some((5, 5, 5)));
     }
     
     #[test]
     fn test_bounding_box() {
-        let min = VecN::Vec2(nalgebra::Vector2::new(0.0, 0.0));
-        let max = VecN::Vec2(nalgebra::Vector2::new(10.0, 10.0));
+        // VecN is a 3D vector and `area()` computes the box volume, so use a box
+        // with a non-zero extent in every axis.
+        let min = VecN::new(0.0, 0.0, 0.0);
+        let max = VecN::new(10.0, 10.0, 10.0);
         let bbox = BoundingBox::new(min, max);
-        
-        let point_inside = VecN::Vec2(nalgebra::Vector2::new(5.0, 5.0));
-        let point_outside = VecN::Vec2(nalgebra::Vector2::new(15.0, 15.0));
-        
+
+        let point_inside = VecN::new(5.0, 5.0, 5.0);
+        let point_outside = VecN::new(15.0, 15.0, 15.0);
+
         assert!(bbox.contains_point(&point_inside));
         assert!(!bbox.contains_point(&point_outside));
-        
-        assert_eq!(bbox.area(), 100.0);
+
+        // 10 x 10 x 10
+        assert_eq!(bbox.area(), 1000.0);
     }
     
     #[test]
