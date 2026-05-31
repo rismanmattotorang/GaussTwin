@@ -16,6 +16,20 @@ members = [
     "crates/gausstwin-integration",
     "crates/gausstwin-spaces",
 ]
+# The minimum-viable v0.x product surface (Phase 3 consolidation): the simulation
+# engine + serving stack. Bare `cargo build`/`test`/`clippy` operate on these (and
+# their dependencies), so day-to-day work doesn't compile the heavy, breadth-first
+# long tail. The full set — notably `gausstwin-integration` (rdkafka/scylla/ethers/…)
+# and `gausstwin-cosim` (FMI/HLA) — is still built/tested via `--workspace` (CI).
+default-members = [
+    "gausstwin-cli",
+    "crates/gausstwin-core",
+    "crates/gausstwin-api",
+    "crates/gausstwin-agent",
+    "crates/gausstwin-des",
+    "crates/gausstwin-fsm",
+    "crates/gausstwin-spaces",
+]
 exclude = [
     "ui/desktop/src-tauri",
     "ui/tui",

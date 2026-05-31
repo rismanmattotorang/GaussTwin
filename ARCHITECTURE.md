@@ -1,5 +1,37 @@
 # GaussTwin Architecture
 
+## Crate Tiers (v0.x consolidation)
+
+The workspace is consolidated into a **minimum-viable product (MVP) surface** plus an
+opt-in **breadth** tier. The Cargo `default-members` are the MVP crates, so bare
+`cargo build` / `cargo test` / `cargo clippy` operate on the MVP and skip the heavy
+long tail; the full set is still built and tested via `--workspace` (and in CI).
+
+**MVP — the v0.x simulation + serving surface (`default-members`):**
+
+| Crate | Role |
+|---|---|
+| `gausstwin-core` | agents, spaces, scheduler, model, events, time |
+| `gausstwin-spaces` | grid/continuous/graph spaces, spatial indices, pathfinding |
+| `gausstwin-des` | discrete-event simulation (scheduling, checkpoint/rollback) |
+| `gausstwin-fsm` | finite state machines + system dynamics |
+| `gausstwin-agent` | BDI / cognitive / reactive agent architectures |
+| `gausstwin-api` | REST / GraphQL / gRPC / WebSocket serving |
+| `gausstwin-cli` | command-line entry point |
+
+> The MVP transitively pulls the data/serving plane (`gausstwin-{data,db,vec,ai,visual}`)
+> through `api`/`agent`. Decoupling those from `api` via features is a tracked follow-up.
+
+**Breadth — opt-in, built only via `--workspace` (not in `default-members`):**
+
+| Crate | Why it's opt-in |
+|---|---|
+| `gausstwin-integration` | 13 protocol connectors (`rdkafka`+SASL, `scylla`, `ethers`, `sqlx`, `mongodb`, AWS/Azure, `zenoh`, …) — heaviest deps + largest supply-chain surface. Per-connector feature-gating is the next consolidation step. |
+| `gausstwin-cosim` | FMI 2.0 / HLA co-simulation; needs real FMU/RTI infrastructure to exercise fully. |
+
+Speculative `gausstwin-core` modules (`gpu`, `quantum`, `blockchain`, `distributed`,
+`hpc`) are already feature-gated and off by default (see that crate's `[features]`).
+
 ## System Overview
 
 ```mermaid

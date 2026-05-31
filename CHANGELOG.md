@@ -52,6 +52,13 @@ it reaches `1.0.0`. While pre-1.0, minor versions may include breaking changes.
   live-SurrealDB integration test is `#[ignore]`d (run with `--ignored`).
 - `gausstwin-fsm`: fixed the crate-level rustdoc doctest (State API drift).
 
+### Phase 3 (consolidation)
+- Defined the **minimum-viable v0.x surface** via Cargo `default-members`
+  (`core, spaces, des, fsm, agent, api, cli`). Bare `cargo build`/`test`/`clippy` now
+  skip the breadth long tail — `gausstwin-integration` (rdkafka/scylla/ethers/sqlx/…)
+  and `gausstwin-cosim` (FMI/HLA) — which remain built/tested via `--workspace` (CI).
+- Documented the crate tiers (MVP vs. opt-in breadth) in `ARCHITECTURE.md`.
+
 ### CI green set
 - **The entire workspace test suite is now green** — the blocking CI gate is
   `cargo test --workspace`. Tests needing external infra (live SurrealDB, FMU/RTI,

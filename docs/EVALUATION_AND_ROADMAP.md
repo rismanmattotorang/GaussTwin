@@ -244,9 +244,14 @@ seed, and benchmarked.**
 ### Phase 3 — Consolidate breadth into depth *(4–6 weeks)*
 **Exit gate: each shipped crate has integration tests and is feature-gated; nothing claims
 "complete" without a passing integration test.**
-- [ ] Pick the **minimum viable surface** for v0.x: core + spaces + des + fsm + one
-      agent-domain + api. Move the rest behind `experimental` features or out of the default
-      workspace until they earn their keep.
+- [~] Pick the **minimum viable surface** for v0.x: core + spaces + des + fsm + one
+      agent-domain + api. **Done:** the workspace `default-members` is now the MVP surface
+      (`core, api, agent, des, fsm, spaces, cli`), so bare `cargo build`/`test`/`clippy` skip
+      the breadth long tail — notably `gausstwin-integration` (rdkafka/scylla/ethers/sqlx/…)
+      and `gausstwin-cosim` (FMI/HLA) — which remain available via `--workspace` (CI). See the
+      crate tiers in `../ARCHITECTURE.md`. **Pending:** feature-gate the connectors inside
+      `gausstwin-integration` so individual protocols are opt-in (the heavy deps become
+      optional); feature-gate `gausstwin-api`'s coupling to `db`/`visual`/`data`.
 - [ ] Integration tests: connectors against ephemeral brokers (testcontainers), DB against a
       real SurrealDB, cosim against reference FMUs.
 - [ ] Replace the hand-rolled `gausstwin-ai` neural stack with **Candle** (as the paper
