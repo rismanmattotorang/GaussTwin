@@ -15,7 +15,7 @@ use std::{
 
 use parking_lot::{Mutex, RwLock};
 use serde::{Deserialize, Serialize};
-use tokio::sync::{broadcast, Barrier};
+use tokio::sync::broadcast;
 use tracing::{debug, error, info, warn};
 
 use super::{data::DataValue, time::SimulationTime, CosimError, Result};
@@ -94,9 +94,6 @@ pub struct SyncManager {
     /// Participating federates
     federates: HashMap<String, FederateInfo>,
 
-    /// Synchronization barrier
-    barrier: Arc<Barrier>,
-
     /// State history for rollback
     state_history: Arc<RwLock<StateHistory>>,
 
@@ -114,13 +111,17 @@ pub struct SyncManager {
 }
 
 impl SyncManager {
-    /// Create new synchronization manager
-    pub fn new(mode: SyncMode, num_federates: usize) -> Self {
+    /// Create new synchronization manager.
+    ///
+    /// `_num_federates` is retained for API compatibility. It previously sized a
+    /// rendezvous `Barrier`, but federates are passive (registered data + state
+    /// closures coordinated synchronously within `synchronize`), so there is no
+    /// second task to rendezvous with — the barrier only ever deadlocked.
+    pub fn new(mode: SyncMode, _num_federates: usize) -> Self {
         let (tx, _) = broadcast::channel(1000);
         Self {
             mode,
             federates: HashMap::new(),
-            barrier: Arc::new(Barrier::new(num_federates)),
             state_history: Arc::new(RwLock::new(StateHistory::new())),
             event_tx: tx,
             antimessages: Vec::new(),
@@ -170,16 +171,15 @@ impl SyncManager {
             sync_points.insert(name.clone(), time);
         }
 
-        // Check if safe to advance
-        let min_time = sync_points.values().min().unwrap();
-        if *min_time + SimulationTime::from_duration(lookahead) < time {
-            return Err(CosimError::TimeSync(
-                "Cannot advance beyond lookahead window".to_string(),
-            ));
+        // Check if safe to advance (skip when there are no federates yet).
+        if let Some(min_time) = sync_points.values().min() {
+            if *min_time + SimulationTime::from_duration(lookahead) < time {
+                return Err(CosimError::TimeSync(
+                    "Cannot advance beyond lookahead window".to_string(),
+                ));
+            }
         }
 
-        // Wait at barrier
-        self.barrier.wait().await;
         Ok(())
     }
 
@@ -211,8 +211,6 @@ impl SyncManager {
             ));
         }
 
-        // Wait at barrier
-        self.barrier.wait().await;
         Ok(())
     }
 
@@ -231,18 +229,12 @@ impl SyncManager {
         let history = self.state_history.write();
         if let Ok(state) = history.get_state(time) {
             let state = state.clone();
-            // Notify federates
-            self.event_tx
-                .send(SyncEvent::Rollback {
-                    time,
-                    state: state.clone(),
-                })
-                .map_err(|e| {
-                    CosimError::Runtime(format!("Failed to send rollback event: {}", e))
-                })?;
-
-            // Wait for acknowledgment
-            self.barrier.wait().await;
+            // Notify any listeners. This is a fire-and-forget broadcast: a send error
+            // just means there are currently no subscribers, which is not fatal.
+            let _ = self.event_tx.send(SyncEvent::Rollback {
+                time,
+                state: state.clone(),
+            });
             Ok(())
         } else {
             Err(CosimError::TimeSync(format!(
@@ -254,14 +246,8 @@ impl SyncManager {
 
     /// Advance simulation time
     async fn advance_time(&self, time: SimulationTime) -> Result<()> {
-        self.event_tx
-            .send(SyncEvent::TimeAdvance { time })
-            .map_err(|e| {
-                CosimError::Runtime(format!("Failed to send time advance event: {}", e))
-            })?;
-
-        // Wait for acknowledgment
-        self.barrier.wait().await;
+        // Fire-and-forget time-advance notification: no subscribers is not an error.
+        let _ = self.event_tx.send(SyncEvent::TimeAdvance { time });
         Ok(())
     }
 
@@ -551,10 +537,6 @@ pub enum TimeStatus {
 mod tests {
     use super::*;
 
-    // TODO(phase1-test-debt): `SyncManager::synchronize` blocks indefinitely here
-    // (waits on federates that never advance), so this test hangs. Ignored to keep
-    // the suite runnable; the underlying deadlock is tracked as a runtime bug.
-    #[ignore = "synchronize() deadlocks — tracked runtime bug, see Phase 1 test hardening"]
     #[tokio::test]
     async fn test_conservative_sync() {
         let mut sync_mgr = SyncManager::new(
@@ -594,8 +576,6 @@ mod tests {
         sync_mgr.synchronize(time).await.unwrap();
     }
 
-    // TODO(phase1-test-debt): same deadlock as test_conservative_sync.
-    #[ignore = "synchronize() deadlocks — tracked runtime bug, see Phase 1 test hardening"]
     #[tokio::test]
     async fn test_optimistic_sync() {
         let mut sync_mgr = SyncManager::new(

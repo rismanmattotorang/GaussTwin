@@ -269,11 +269,13 @@ mod tests {
 
         let sum = t1 + t2;
         assert_eq!(sum.steps, 4);
-        assert_eq!(sum.fraction, 0.2);
+        // Fractions accumulate in f64 (0.5 + 0.7 carries into steps), so compare
+        // with a tolerance rather than for exact equality.
+        assert!((sum.fraction - 0.2).abs() < 1e-9);
 
         let diff = t2 - t1;
         assert_eq!(diff.steps, 1);
-        assert_eq!(diff.fraction, 0.2);
+        assert!((diff.fraction - 0.2).abs() < 1e-9);
     }
 
     #[test]
