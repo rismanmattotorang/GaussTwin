@@ -279,13 +279,20 @@ pub struct StandardModel<S: crate::agent::AgentState> {
 impl<S: crate::agent::AgentState> StandardModel<S> {
     /// Create a new standard model
     pub fn new(config: ModelConfig) -> Result<Self> {
+        // Build the random scheduler from the configured seed when one is set, so
+        // `ModelConfig::with_seed` actually makes runs reproducible. Without a seed,
+        // fall back to a randomly-seeded scheduler.
+        let make_random = || match config.seed {
+            Some(seed) => crate::scheduler::RandomScheduler::new(seed),
+            None => crate::scheduler::RandomScheduler::new_random(),
+        };
         let scheduler: Box<dyn Scheduler<S>> = match config.scheduler_kind {
-            SchedulerKind::Random => Box::new(crate::scheduler::RandomScheduler::new_random()),
+            SchedulerKind::Random => Box::new(make_random()),
             SchedulerKind::Sequential => Box::new(crate::scheduler::SequentialScheduler::new()),
             SchedulerKind::Parallel => Box::new(crate::scheduler::ParallelScheduler::auto_batch()),
             SchedulerKind::Priority => Box::new(crate::scheduler::PriorityScheduler::new()),
             SchedulerKind::EventBased => Box::new(crate::scheduler::EventScheduler::new()),
-            SchedulerKind::Custom(_) => Box::new(crate::scheduler::RandomScheduler::new_random()), // Default fallback
+            SchedulerKind::Custom(_) => Box::new(make_random()), // Default fallback
         };
 
         Ok(Self {

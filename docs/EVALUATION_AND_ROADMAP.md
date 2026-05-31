@@ -208,8 +208,18 @@ seed, and benchmarked.**
       core). `vec` AVX2 intrinsics now carry `#[target_feature(enable="avx2")]` + SAFETY docs;
       `spaces` memory-pool `unsafe` made sound (no leak, `Drop` reclaims) + documented.
       **Pending:** `miri`/fuzz, and the nightly `std::simd` path in `spaces`.
-- [ ] Property tests (`proptest`) for spaces/scheduler; **determinism/seed-stability test**
+- [~] Property tests (`proptest`) for spaces/scheduler; **determinism/seed-stability test**
       (same seed ⇒ identical trace) — prerequisite for the paper's reproducibility claim.
+      **Done:** fixed two real determinism bugs — `StandardModel` ignored
+      `ModelConfig::seed` (the random scheduler was seeded from `rand::random()`), and
+      `AgentSet::agent_ids()` returned `HashMap` keys in nondeterministic order (now
+      sorted; `AgentId` is `Ord`). Added a scheduler seed-stability test (same seed ⇒
+      identical multi-step activation order). **Blocker for full state-trace
+      determinism:** `StandardModel::step` is a stub — it advances time but never
+      executes agent behavior (fetches the agent into an unused binding). Implementing
+      the agent-execution loop is the prerequisite for an end-to-end trace-determinism
+      test, and is the core ABM-runtime work this phase must tackle next.
+      **Pending:** `proptest` for spaces; end-to-end trace determinism once the loop exists.
 - [ ] Criterion benchmarks wired into CI with regression alerts.
 
 ### Phase 3 — Consolidate breadth into depth *(4–6 weeks)*

@@ -20,7 +20,7 @@ use crate::time::SimTime;
 use std::fmt;
 
 /// Unique identifier for agents
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct AgentId(Uuid);
 
 impl AgentId {
@@ -189,7 +189,12 @@ impl<S: AgentState> AgentSet<S> {
 
     /// Get all agent IDs
     pub fn agent_ids(&self) -> Vec<AgentId> {
-        self.agents.keys().copied().collect()
+        // Sort for a deterministic order: the backing map is a `HashMap`, whose
+        // iteration order is randomized per process. A stable order here is a
+        // prerequisite for reproducible (seeded) scheduling.
+        let mut ids: Vec<AgentId> = self.agents.keys().copied().collect();
+        ids.sort_unstable();
+        ids
     }
 
     /// Get all agent IDs (alias for compatibility)

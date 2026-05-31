@@ -56,6 +56,15 @@ it reaches `1.0.0`. While pre-1.0, minor versions may include breaking changes.
 - Blocking test set expanded to {core, api, fsm, des, integration, db, spaces, vec,
   visual}. Only `cosim` (deadlock) and `data` (tests don't compile) remain.
 
+### Phase 2 (determinism)
+- `StandardModel` now seeds its random scheduler from `ModelConfig::seed`
+  (`with_seed` was previously ignored — the scheduler used `rand::random()`).
+- `AgentSet::agent_ids()` returns a deterministic (sorted) order instead of
+  `HashMap` key order; `AgentId` is now `Ord`.
+- Added a scheduler seed-stability test (same seed ⇒ identical activation order).
+  Note: end-to-end state-trace determinism is still blocked on the agent-execution
+  loop, which `StandardModel::step` does not yet implement.
+
 ### Phase 2 (started) — keep core minimal
 - Feature-gated the speculative `gausstwin-core` modules (`hpc`, `gpu`,
   `distributed`, `quantum`, `blockchain`) behind opt-in Cargo features. The default

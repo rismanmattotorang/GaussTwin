@@ -647,6 +647,50 @@ mod tests {
         assert_eq!(executed_agents.len(), 3);
     }
 
+    /// Seed-stability: with a fixed seed the random scheduler produces the *same*
+    /// agent-activation order on every run — the reproducibility primitive the
+    /// platform's determinism guarantee is built on. (End-to-end state-trace
+    /// determinism additionally requires the agent-execution loop, which is not yet
+    /// wired in `StandardModel::step`; tracked in the roadmap.)
+    #[test]
+    fn test_random_scheduler_seed_determinism() {
+        // Deterministic agent ids so the only variable is the seed.
+        let agents: Vec<AgentId> = (0..50u128).map(AgentId::from_raw).collect();
+
+        // Activation order across several steps for a given seed.
+        let trace = |seed: u64| -> Vec<Vec<AgentId>> {
+            let mut sched = RandomScheduler::new(seed);
+            <RandomScheduler as Scheduler<TestState>>::initialize(&mut sched, &agents).unwrap();
+            let mut steps = Vec::new();
+            for _ in 0..5 {
+                <RandomScheduler as Scheduler<TestState>>::reset_step(&mut sched).unwrap();
+                let mut order = Vec::new();
+                while <RandomScheduler as Scheduler<TestState>>::has_next(&sched) {
+                    order.extend(
+                        <RandomScheduler as Scheduler<TestState>>::next_batch(
+                            &mut sched,
+                            SimTime::zero(),
+                        )
+                        .unwrap(),
+                    );
+                }
+                steps.push(order);
+            }
+            steps
+        };
+
+        // Same seed ⇒ identical multi-step activation trace.
+        assert_eq!(trace(42), trace(42));
+
+        // The scheduler genuinely shuffles (order differs from the input order).
+        assert!(trace(42)
+            .iter()
+            .any(|step| step.as_slice() != agents.as_slice()));
+
+        // Different seeds generally produce a different trace.
+        assert_ne!(trace(42), trace(7));
+    }
+
     #[test]
     fn test_sequential_scheduler() {
         let mut scheduler = SequentialScheduler::new();
