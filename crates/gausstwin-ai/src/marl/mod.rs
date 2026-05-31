@@ -1,8 +1,8 @@
+use crate::core;
+use crate::rl::Experience;
+use crate::{Agent, Metrics, Result};
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use crate::{Result, Metrics, Agent};
-use crate::rl::Experience;
-use crate::core;
 
 /// Shared state between MARL agents
 #[derive(Debug)]
@@ -75,9 +75,7 @@ pub enum RewardStrategy {
         global_weight: f32,
     },
     /// Dynamic reward allocation based on contribution
-    Dynamic {
-        contribution_threshold: f32,
-    },
+    Dynamic { contribution_threshold: f32 },
 }
 
 /// Observation enhancement modes from LERO paper
@@ -91,9 +89,7 @@ pub enum ObsEnhancement {
         inference_depth: usize,
     },
     /// Adaptive enhancement based on uncertainty
-    Adaptive {
-        uncertainty_threshold: f32,
-    },
+    Adaptive { uncertainty_threshold: f32 },
 }
 
 /// MARL agent implementing state-of-the-art algorithms
@@ -190,15 +186,25 @@ impl MARLAgent {
     pub async fn synchronize(&self, _shared_state: &SharedState) -> Result<()> {
         // TODO: Implement MARL synchronization
         match self.config.sync_mode {
-            SyncMode::Conservative { lookahead: _, min_step: _, max_lag: _ } => {
+            SyncMode::Conservative {
+                lookahead: _,
+                min_step: _,
+                max_lag: _,
+            } => {
                 // TODO: Implement conservative synchronization
                 Ok(())
             }
-            SyncMode::Optimistic { max_rollback: _, state_save_interval: _ } => {
+            SyncMode::Optimistic {
+                max_rollback: _,
+                state_save_interval: _,
+            } => {
                 // TODO: Implement optimistic synchronization
                 Ok(())
             }
-            SyncMode::Hybrid { conservative_weight: _, optimistic_weight: _ } => {
+            SyncMode::Hybrid {
+                conservative_weight: _,
+                optimistic_weight: _,
+            } => {
                 // TODO: Implement hybrid synchronization
                 Ok(())
             }
@@ -209,11 +215,16 @@ impl MARLAgent {
     async fn enhance_observation(&self, state: &[f32]) -> Result<Vec<f32>> {
         match &self.config.obs_enhancement {
             ObsEnhancement::Raw => Ok(state.to_vec()),
-            ObsEnhancement::Enhanced { context_window: _, inference_depth: _ } => {
+            ObsEnhancement::Enhanced {
+                context_window: _,
+                inference_depth: _,
+            } => {
                 // TODO: Implement context-based enhancement
                 Ok(state.to_vec())
             }
-            ObsEnhancement::Adaptive { uncertainty_threshold: _ } => {
+            ObsEnhancement::Adaptive {
+                uncertainty_threshold: _,
+            } => {
                 // TODO: Implement adaptive enhancement
                 Ok(state.to_vec())
             }
@@ -234,11 +245,16 @@ impl MARLAgent {
                 // TODO: Implement global reward sharing
                 Ok(experience.reward as f32)
             }
-            RewardStrategy::Hybrid { individual_weight, global_weight } => {
+            RewardStrategy::Hybrid {
+                individual_weight,
+                global_weight,
+            } => {
                 // TODO: Implement hybrid reward computation
                 Ok(experience.reward as f32)
             }
-            RewardStrategy::Dynamic { contribution_threshold } => {
+            RewardStrategy::Dynamic {
+                contribution_threshold,
+            } => {
                 // TODO: Implement dynamic reward allocation
                 Ok(experience.reward as f32)
             }

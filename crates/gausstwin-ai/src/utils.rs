@@ -6,7 +6,10 @@ pub struct Utils;
 impl Utils {
     /// Convert a vector to a hash map
     pub fn vec_to_map<T: Clone>(keys: &[String], values: &[T]) -> HashMap<String, T> {
-        keys.iter().zip(values.iter()).map(|(k, v)| (k.clone(), v.clone())).collect()
+        keys.iter()
+            .zip(values.iter())
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect()
     }
 
     /// Convert a hash map to vectors
@@ -30,7 +33,8 @@ impl Utils {
             return 0.0;
         }
         let mean = Self::mean(values);
-        let variance = values.iter().map(|x| (x - mean).powi(2)).sum::<f64>() / (values.len() - 1) as f64;
+        let variance =
+            values.iter().map(|x| (x - mean).powi(2)).sum::<f64>() / (values.len() - 1) as f64;
         variance.sqrt()
     }
-} 
+}

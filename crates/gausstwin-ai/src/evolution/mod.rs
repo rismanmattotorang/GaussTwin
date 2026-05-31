@@ -1,7 +1,7 @@
+use crate::core::State;
+use crate::Result;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use crate::Result;
-use crate::core::State;
 
 /// Evolution configuration based on latest research
 #[derive(Clone, Debug)]
@@ -29,9 +29,7 @@ pub enum SelectionStrategy {
         selection_pressure: f32,
     },
     /// Rank-based selection
-    RankBased {
-        selective_pressure: f32,
-    },
+    RankBased { selective_pressure: f32 },
     /// Multi-objective selection
     MultiObjective {
         objectives: Vec<ObjectiveConfig>,
@@ -79,10 +77,7 @@ pub enum AdaptationStrategy {
         adaptation_interval: usize,
     },
     /// Covariance matrix adaptation
-    CMA {
-        sigma: f32,
-        population_size: usize,
-    },
+    CMA { sigma: f32, population_size: usize },
     /// Meta-evolution
     MetaEvolution {
         meta_population_size: usize,
@@ -94,13 +89,9 @@ pub enum AdaptationStrategy {
 #[derive(Clone, Debug)]
 pub enum MutationType {
     /// Gaussian mutation
-    Gaussian {
-        std_dev: f32,
-    },
+    Gaussian { std_dev: f32 },
     /// Polynomial mutation
-    Polynomial {
-        distribution_index: f32,
-    },
+    Polynomial { distribution_index: f32 },
     /// Differential mutation
     Differential {
         scale_factor: f32,
@@ -121,13 +112,9 @@ pub enum CrossoverType {
     /// Multi-point crossover
     MultiPoint(usize),
     /// Uniform crossover
-    Uniform {
-        swap_probability: f32,
-    },
+    Uniform { swap_probability: f32 },
     /// Simulated binary crossover
-    SimulatedBinary {
-        distribution_index: f32,
-    },
+    SimulatedBinary { distribution_index: f32 },
 }
 
 /// Objective configuration for multi-objective optimization
@@ -270,19 +257,19 @@ impl EvolutionEngine {
         for generation in 0..self.config.num_generations {
             // Selection
             let parents = self.select_parents().await?;
-            
+
             // Variation (crossover and mutation)
             let offspring = self.create_offspring(&parents).await?;
-            
+
             // Evaluation
             self.evaluate_population(&offspring).await?;
-            
+
             // Replacement
             self.update_population(offspring).await?;
-            
+
             // Update statistics
             self.update_stats(generation).await?;
-            
+
             // Adapt parameters if needed
             self.adapt_parameters().await?;
         }
@@ -292,19 +279,30 @@ impl EvolutionEngine {
     /// Select parents for reproduction
     async fn select_parents(&self) -> Result<Vec<Individual>> {
         match &self.config.selection {
-            SelectionStrategy::Tournament { tournament_size: _, selection_pressure: _ } => {
+            SelectionStrategy::Tournament {
+                tournament_size: _,
+                selection_pressure: _,
+            } => {
                 // TODO: Implement tournament selection
                 Ok(Vec::new())
             }
-            SelectionStrategy::RankBased { selective_pressure: _ } => {
+            SelectionStrategy::RankBased {
+                selective_pressure: _,
+            } => {
                 // TODO: Implement rank-based selection
                 Ok(Vec::new())
             }
-            SelectionStrategy::MultiObjective { objectives: _, pareto_front_size: _ } => {
+            SelectionStrategy::MultiObjective {
+                objectives: _,
+                pareto_front_size: _,
+            } => {
                 // TODO: Implement multi-objective selection
                 Ok(Vec::new())
             }
-            SelectionStrategy::Adaptive { initial_strategy: _, adaptation_rate: _ } => {
+            SelectionStrategy::Adaptive {
+                initial_strategy: _,
+                adaptation_rate: _,
+            } => {
                 // TODO: Implement adaptive selection
                 Ok(Vec::new())
             }
@@ -339,15 +337,24 @@ impl EvolutionEngine {
     async fn adapt_parameters(&mut self) -> Result<()> {
         match &self.config.adaptation {
             AdaptationStrategy::Fixed => Ok(()),
-            AdaptationStrategy::SelfAdaptive { learning_rate: _, adaptation_interval: _ } => {
+            AdaptationStrategy::SelfAdaptive {
+                learning_rate: _,
+                adaptation_interval: _,
+            } => {
                 // TODO: Implement self-adaptation
                 Ok(())
             }
-            AdaptationStrategy::CMA { sigma: _, population_size: _ } => {
+            AdaptationStrategy::CMA {
+                sigma: _,
+                population_size: _,
+            } => {
                 // TODO: Implement CMA-ES adaptation
                 Ok(())
             }
-            AdaptationStrategy::MetaEvolution { meta_population_size: _, meta_generations: _ } => {
+            AdaptationStrategy::MetaEvolution {
+                meta_population_size: _,
+                meta_generations: _,
+            } => {
                 // TODO: Implement meta-evolution
                 Ok(())
             }

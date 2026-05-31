@@ -1,7 +1,7 @@
-use tch::{Device, Tensor, Kind};
-use crate::ml::{Model, ModelConfig, Result, ModelState, ModelMetrics};
-use std::sync::Arc;
+use crate::ml::{Model, ModelConfig, ModelMetrics, ModelState, Result};
 use async_trait::async_trait;
+use std::sync::Arc;
+use tch::{Device, Kind, Tensor};
 
 /// Graph Neural Network model
 pub struct GNNModel {
@@ -38,7 +38,10 @@ impl Model for GNNModel {
     fn forward(&self, input: &Tensor) -> Result<Tensor> {
         // TODO: Implement GNN forward pass
         // For now, return a dummy tensor
-        Ok(Tensor::zeros(&[input.size()[0], 10], (Kind::Float, Device::Cpu)))
+        Ok(Tensor::zeros(
+            &[input.size()[0], 10],
+            (Kind::Float, Device::Cpu),
+        ))
     }
 
     fn training_step(&mut self, batch: &Tensor) -> Result<f32> {
@@ -87,4 +90,4 @@ impl GNNModel {
         // TODO: Implement different loss functions based on task
         Ok(output.mse_loss(target, tch::Reduction::Mean))
     }
-} 
+}

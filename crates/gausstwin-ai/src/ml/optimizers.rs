@@ -68,4 +68,4 @@ impl Optimizer for Adam {
         // TODO: Implement proper gradient zeroing
         // Note: Cannot modify tensors through & references
     }
-} 
+}

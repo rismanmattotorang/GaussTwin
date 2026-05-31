@@ -26,4 +26,4 @@ pub struct AIState {
     pub models: HashMap<String, ModelState>,
     pub metrics: HashMap<String, ModelMetrics>,
     pub timestamp: u64,
-} 
+}

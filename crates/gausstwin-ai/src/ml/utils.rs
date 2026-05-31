@@ -1,4 +1,4 @@
-use tch::{Device, Tensor, Kind};
+use tch::{Device, Kind, Tensor};
 
 /// Utility functions for ML operations
 pub struct MLUtils;
@@ -15,12 +15,12 @@ impl MLUtils {
     pub fn one_hot(labels: &Tensor, num_classes: i64) -> Tensor {
         let batch_size = labels.size()[0];
         let mut one_hot = Tensor::zeros(&[batch_size, num_classes], (Kind::Float, Device::Cpu));
-        
+
         // Use scatter for one-hot encoding
         let indices = labels.unsqueeze(1);
         let ones = Tensor::ones(&[batch_size, num_classes], (Kind::Float, Device::Cpu));
         one_hot = one_hot.scatter(1, &indices, &ones);
-        
+
         one_hot
     }
 
@@ -29,10 +29,10 @@ impl MLUtils {
         let total_size = tensor.size()[0];
         let val_size = (total_size as f64 * val_ratio) as i64;
         let train_size = total_size - val_size;
-        
+
         let train_data = tensor.narrow(0, 0, train_size);
         let val_data = tensor.narrow(0, train_size, val_size);
-        
+
         (train_data, val_data)
     }
-} 
+}

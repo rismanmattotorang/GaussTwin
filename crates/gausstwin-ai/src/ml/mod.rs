@@ -1,8 +1,8 @@
-use tch::{Device, Tensor, Kind};
-use std::sync::Arc;
-use tokio::sync::RwLock;
-use thiserror::Error;
 use crate::{AIError, Result};
+use std::sync::Arc;
+use tch::{Device, Kind, Tensor};
+use thiserror::Error;
+use tokio::sync::RwLock;
 
 /// ML-specific errors
 #[derive(Error, Debug)]
@@ -17,19 +17,16 @@ pub enum MLError {
     PreprocessingError(String),
 }
 
-pub mod models;
+pub mod data;
 pub mod layers;
-pub mod optimizers;
 pub mod losses;
 pub mod metrics;
-pub mod data;
+pub mod models;
+pub mod optimizers;
 pub mod utils;
 
 // Re-export commonly used types
-pub use models::{
-    ModelFactory, GNNModel, TransformerModel,
-    VisionModel,
-};
+pub use models::{GNNModel, ModelFactory, TransformerModel, VisionModel};
 
 /// Model configuration for deep learning models
 #[derive(Clone, Debug)]
@@ -125,10 +122,7 @@ pub enum GraphAggregation {
     Sum,
     Mean,
     Max,
-    Attention {
-        num_heads: usize,
-        key_dims: usize,
-    },
+    Attention { num_heads: usize, key_dims: usize },
 }
 
 /// Vision backbone architectures
@@ -225,25 +219,25 @@ pub trait ModelBuilder: Send + Sync {
 pub trait Model: Send + Sync {
     /// Initialize model
     fn init(&mut self) -> Result<()>;
-    
+
     /// Forward pass
     fn forward(&self, input: &Tensor) -> Result<Tensor>;
-    
+
     /// Training step
     fn training_step(&mut self, batch: &Tensor) -> Result<f32>;
-    
+
     /// Validation step
     fn validation_step(&self, batch: &Tensor) -> Result<f32>;
-    
+
     /// Save model weights
     fn save_weights(&self, path: &str) -> Result<()>;
-    
+
     /// Load model weights
     fn load_weights(&mut self, path: &str) -> Result<()>;
-    
+
     /// Get model parameters
     fn parameters(&self) -> Vec<Tensor>;
-    
+
     /// Get model configuration
     fn config(&self) -> &ModelConfig;
 }

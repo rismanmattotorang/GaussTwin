@@ -1,1 +1,35 @@
+# Rust
 /target
+**/*.rs.bk
+*.pdb
+
+# Build artifacts / native libs fetched by `tch` (libtorch)
+/libtorch
+**/libtorch/
+
+# Node / web UI
+node_modules/
+dist/
+.vite/
+*.tsbuildinfo
+
+# Python bindings
+__pycache__/
+*.pyc
+.venv/
+*.so
+
+# Tauri
+ui/desktop/src-tauri/target/
+
+# Editors / OS
+.DS_Store
+*.swp
+.idea/
+.vscode/
+*.log
+
+# Coverage
+*.profraw
+lcov.info
+/coverage

@@ -15,12 +15,18 @@ members = [
     "crates/gausstwin-fsm",
     "crates/gausstwin-integration",
     "crates/gausstwin-spaces",
-    "bindings/gausstwin-py",
-    "bindings/gausstwin-ts"
 ]
 exclude = [
     "ui/desktop/src-tauri",
-    "ui/tui"
+    "ui/tui",
+    # Language bindings require dedicated build toolchains and are not part of a
+    # plain `cargo build --workspace`:
+    #   - gausstwin-py  : built with maturin (pyo3 extension-module)
+    #   - gausstwin-ts  : built with wasm-pack (wasm-bindgen, wasm32 target)
+    # They also depend on the libtorch-backed `ml` module; build them explicitly
+    # with the `torch` feature once libtorch is available. See docs/BUILD.md.
+    "bindings/gausstwin-py",
+    "bindings/gausstwin-ts",
 ]
 
 [workspace.package]
@@ -78,7 +84,9 @@ tokio-tungstenite = "0.21"
 
 # Database dependencies
 surrealdb = { version = "1.0.0", features = ["kv-mem"] }
-milvus-sdk-rust = "0.1.0"
+# NOTE: `milvus-sdk-rust 0.1.0` was a declared-but-unused (dead) dependency that
+# also forced a `protoc` build-time requirement. Removed in Phase 0. Re-add behind
+# a feature flag if/when a Milvus vector backend is actually implemented.
 skytable = "0.7"
 
 # Monitoring dependencies

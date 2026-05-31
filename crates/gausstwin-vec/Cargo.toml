@@ -23,7 +23,6 @@ tokio = { workspace = true }
 ordered-float = "4.2"
 tracing = { workspace = true }
 uuid = { workspace = true }
-milvus-sdk-rust = "0.1.0"
 
 [dev-dependencies]
 criterion = { workspace = true }

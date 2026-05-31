@@ -1,0 +1,6 @@
+# Pin the toolchain so every contributor and CI runner builds GaussTwin
+# identically. Bump deliberately, never implicitly.
+[toolchain]
+channel = "1.94.1"
+components = ["rustfmt", "clippy"]
+profile = "default"

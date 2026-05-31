@@ -52,7 +52,6 @@ futures-util = "0.3"
 
 # Database
 surrealdb = { workspace = true }
-milvus-sdk-rust = { workspace = true }
 skytable = { workspace = true }
 
 # Authentication & Security

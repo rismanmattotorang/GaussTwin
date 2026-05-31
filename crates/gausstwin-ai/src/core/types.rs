@@ -20,4 +20,4 @@ pub struct Config {
     pub model_path: String,
     pub batch_size: usize,
     pub learning_rate: f64,
-} 
+}

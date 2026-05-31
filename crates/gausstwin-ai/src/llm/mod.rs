@@ -1,7 +1,7 @@
+use crate::rl::Experience;
+use crate::{Agent, Metrics, Result};
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use crate::{Result, Metrics, Agent};
-use crate::rl::Experience;
 
 /// LLM agent configuration based on latest research
 #[derive(Clone, Debug)]
@@ -83,10 +83,7 @@ pub enum RetrievalStrategy {
         distance_metric: DistanceMetric,
     },
     /// Attention-based retrieval
-    Attention {
-        num_heads: usize,
-        temperature: f32,
-    },
+    Attention { num_heads: usize, temperature: f32 },
     /// Hierarchical retrieval
     Hierarchical {
         levels: Vec<usize>,
@@ -177,7 +174,11 @@ impl Memory {
 }
 
 impl Reasoner {
-    pub async fn generate_response(&self, _context: &str, _memories: &Vec<String>) -> crate::Result<String> {
+    pub async fn generate_response(
+        &self,
+        _context: &str,
+        _memories: &Vec<String>,
+    ) -> crate::Result<String> {
         // Stub: return empty string
         Ok(String::new())
     }

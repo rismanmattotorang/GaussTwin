@@ -1,6 +1,6 @@
+use crate::Result;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use crate::Result;
 
 /// Configuration for reinforcement learning
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -92,4 +92,4 @@ impl ReplayBuffer {
     }
 }
 
-// Remove this line since these are already defined in the module 
+// Remove this line since these are already defined in the module

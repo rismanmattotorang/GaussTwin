@@ -30,4 +30,4 @@ pub struct InferenceMetrics {
     pub throughput: f64,
     pub memory_usage_mb: f64,
     pub gpu_utilization: f64,
-} 
+}

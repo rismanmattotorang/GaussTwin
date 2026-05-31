@@ -40,4 +40,4 @@ pub enum Precision {
     F32,
     F16,
     I8,
-} 
+}

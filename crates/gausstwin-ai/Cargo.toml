@@ -33,13 +33,22 @@ tokio = { workspace = true }
 log = "0.4"
 
 # ML dependencies
-tch = { version = "0.15", features = ["download-libtorch"] }
-smartcore = "0.3"
-ndarray-linalg = { version = "0.16", features = ["openblas-system"] }
+# `tch` pulls in libtorch (a ~2GB native dependency downloaded at build time).
+# It is gated behind the optional `torch` feature so the default workspace build
+# is light and hermetic (no network-fetched native blobs). Enable with
+# `--features torch` once libtorch is available. See Phase 3 of the roadmap:
+# the hand-rolled tch ML stack is slated to be replaced by Candle.
+tch = { version = "0.15", features = ["download-libtorch"], optional = true }
 rayon = "1.10.0"
 num_cpus = "1.17.0"
 env_logger = "0.11.8"
 ctrlc = "3.4.7"
+
+[features]
+default = []
+# Enables the libtorch-backed neural-network module (`ml/`) and the AISystem
+# model-factory integration. Requires libtorch (downloaded via tch).
+torch = ["dep:tch"]
 
 [dev-dependencies]
 criterion = { workspace = true }
@@ -51,3 +60,5 @@ test-case = "3.3"
 [[bench]]
 name = "ai_benchmarks"
 harness = false
+# This benchmark exercises the libtorch-backed `ml` module.
+required-features = ["torch"]

@@ -1,0 +1,4 @@
+# Formatting is enforced in CI via `cargo fmt --all --check`.
+edition = "2021"
+max_width = 100
+use_small_heuristics = "Default"

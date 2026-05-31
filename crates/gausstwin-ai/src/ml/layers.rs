@@ -1,4 +1,4 @@
-use tch::{Device, Tensor, Kind};
+use tch::{Device, Kind, Tensor};
 
 /// Represents a neural network layer
 pub trait Layer: Send {
@@ -41,4 +41,4 @@ impl Layer for ReLULayer {
     fn parameters(&self) -> Vec<Tensor> {
         vec![]
     }
-} 
+}
