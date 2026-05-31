@@ -16,32 +16,25 @@
 //! - Vector analytics and aggregations
 //!
 //! # Examples
-//! ```no_run
-//! use gausstwin_vec::{VectorStore, MilvusStore, IndexParams, IndexType, MetricType};
+//! ```
+//! use gausstwin_vec::{HnswIndex, HnswConfig, MetricType, Vector, VectorError};
 //!
-//! async fn example() -> Result<(), VectorError> {
-//!     let store = MilvusStore::new(
-//!         "localhost",
-//!         19530,
-//!         "collection",
-//!         128,
-//!         Default::default(),
-//!         Default::default(),
-//!     ).await?;
-//!     
-//!     // Create HNSW index
-//!     let index = IndexParams {
-//!         index_type: IndexType::HNSW,
-//!         metric_type: MetricType::L2,
-//!         params: serde_json::json!({
-//!             "M": 16,
-//!             "efConstruction": 200
-//!         }),
-//!     };
-//!     
-//!     store.create_index(index).await?;
+//! fn example() -> Result<(), VectorError> {
+//!     // Build an in-memory HNSW index over 4-dimensional vectors.
+//!     let mut index = HnswIndex::new(4, MetricType::L2, HnswConfig::default());
+//!
+//!     index.insert(Vector {
+//!         id: "vec_0".to_string(),
+//!         vector: vec![1.0, 2.0, 3.0, 4.0],
+//!         metadata: None,
+//!     })?;
+//!
+//!     // Query for the 5 nearest neighbours.
+//!     let results = index.search(&[1.0, 2.0, 3.0, 4.0], 5)?;
+//!     assert_eq!(results[0].id, "vec_0");
 //!     Ok(())
 //! }
+//! # example().unwrap();
 //! ```
 
 use serde::{Deserialize, Serialize};
@@ -584,10 +577,16 @@ impl HnswIndex {
             }
         }
 
-        results
+        // `BinaryHeap::into_iter` yields elements in arbitrary order, so sort the
+        // collected results nearest-first. Callers rely on this ordering (the
+        // top-layer descent takes `.first()` as the nearest, and `search` returns
+        // the first `k` as the k nearest neighbours).
+        let mut out: Vec<(usize, f32)> = results
             .into_iter()
             .map(|DistNode(neg_dist, node)| (node, -neg_dist))
-            .collect()
+            .collect();
+        out.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
+        out
     }
 
     /// Select neighbors for a node (greedy heuristic)
