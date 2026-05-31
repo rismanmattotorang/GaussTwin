@@ -18,7 +18,7 @@
 //!
 //! # Examples
 //! ```no_run
-//! use gausstwin_db::{TwinStore, SurrealStore, ComplianceConfig};
+//! use gausstwin_db::{SurrealStore, ComplianceConfig, DatabaseError};
 //!
 //! async fn example() -> Result<(), DatabaseError> {
 //!     let config = ComplianceConfig {
@@ -1006,6 +1006,11 @@ mod tests {
     use super::*;
     use tokio;
 
+    // Integration test: SurrealStore connects to a real SurrealDB over WebSocket
+    // (localhost:8000), so this can only run with a live server. Ignored by default
+    // so it doesn't fail unit/CI runs; run with `cargo test -- --ignored` against a
+    // SurrealDB instance. Roadmap Phase 3 wires this up via testcontainers.
+    #[ignore = "requires a running SurrealDB at localhost:8000 — see Phase 3 (testcontainers)"]
     #[tokio::test]
     async fn test_enterprise_features() {
         let config = ComplianceConfig {
